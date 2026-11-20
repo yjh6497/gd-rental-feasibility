@@ -9,7 +9,7 @@
 | `index.html`, `app.js` | 화면 |
 | `engine.js` | 계산 엔진 (총사업비, 임대료, 재원, 현금흐름, NPV·IRR, 민감도) |
 | `api/rent.js` | 국토교통부 전월세 실거래가 API 중계 (아파트·연립다세대·오피스텔) |
-| `api/projects.js` | 사업 저장·목록·삭제 (Upstash Redis) |
+| `api/projects.js` | 사업 저장·목록·삭제 (Vercel Blob 비공개 저장소, 없으면 Upstash Redis) |
 | `api/umd.js` | 시군구의 법정동(읍면동) 목록 (실거래 자료 기준) |
 | `api/health.js` | 연결 상태 확인 |
 
@@ -22,7 +22,7 @@
      - 국토교통부_연립다세대 전월세 실거래가 자료
      - 국토교통부_오피스텔 전월세 실거래가 자료
    - `APP_PASSCODE` — 직원끼리 공유할 접근코드(**필수**). 없으면 실거래가 조회·사업 저장이 열리지 않습니다.
-3. **Storage → Create Database → Upstash (Redis)** 를 이 프로젝트에 연결합니다. `KV_REST_API_URL`, `KV_REST_API_TOKEN` 환경변수가 자동으로 들어갑니다.
+3. **Storage → Create → Blob** 에서 접근 방식 **Private** 로 저장소를 만들어 이 프로젝트에 연결합니다. `BLOB_READ_WRITE_TOKEN` 환경변수가 자동으로 들어갑니다. 사업은 `projects/<id>.json` 파일로 저장됩니다.
 4. **Deployments → Redeploy** 로 환경변수를 반영합니다.
 5. 사이트 상단에 "실거래가 API 연결됨 · 사업 저장소 연결됨"이 보이면 끝입니다.
 
