@@ -48,7 +48,12 @@ label{font-size:14px;color:var(--mute)}
 .f{margin-bottom:6px}.f>div{margin-top:4px}
 input,select{width:100%;font:16px "IBM Plex Sans KR",sans-serif;min-height:42px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink)}
 input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
-.unit{position:relative}.unit input{padding-right:58px}.unit span{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--mute);pointer-events:none}
+.unit{display:flex;align-items:center;border:1px solid var(--line);border-radius:6px;background:var(--panel);transition:border-color .2s,box-shadow .2s}
+.unit input,.tbl .unit input{border:0;background:none;flex:1 1 auto;min-width:0;padding-right:6px;box-shadow:none}
+.unit input:focus,.unit input:hover{box-shadow:none;outline:none}
+.unit span{flex:0 0 auto;white-space:nowrap;padding:0 10px 0 2px;font-size:13px;color:var(--mute)}
+.unit:hover{border-color:color-mix(in srgb,var(--sky) 55%,var(--line))}
+.unit:focus-within{border-color:var(--sky);box-shadow:0 0 0 3px color-mix(in srgb,var(--sky) 20%,transparent)}
 .btn{min-height:42px;padding:0 16px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:500 15px "IBM Plex Sans KR",sans-serif;cursor:pointer}
 .btn.pri{background:var(--navy);color:#fff;border-color:var(--navy)}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
@@ -68,6 +73,7 @@ input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
 th{font-weight:500;color:var(--mute);font-size:13px}
+td:first-child{white-space:nowrap}
 td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 td.neg{color:var(--mag)}
 .scroll{overflow-x:auto}
@@ -155,6 +161,8 @@ input,select,.btn{border-radius:6px}
 .view.enter .fig .pb{animation:popIn .35s 1.15s both;transform-box:fill-box;transform-origin:center bottom}
 .status span+span::before{content:"";display:inline-block;width:1px;height:11px;background:#4a64a8;margin:0 10px;vertical-align:-1px}
 @media(max-width:600px){.top{padding-top:16px}.bar input{flex:1 0 100%}.bar .btn{min-height:38px;padding:0 12px;font-size:14px}.tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;mask-image:linear-gradient(90deg,#000 85%,transparent)}.tabs::-webkit-scrollbar{display:none}.tabs button{flex:0 0 auto}.res{top:auto}}
+.brow.sens{grid-template-columns:11em minmax(0,1fr) 13em}
+@media(max-width:700px){.brow.sens{grid-template-columns:minmax(0,1fr);gap:4px;margin:12px 0}.brow.sens .v{text-align:left}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>

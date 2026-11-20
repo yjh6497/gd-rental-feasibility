@@ -615,7 +615,7 @@ function renderSens() {
   const span = Math.max(1, ...s.rows.map(r => Math.max(Math.abs(r.low - base), Math.abs(r.high - base))));
   $('sens').innerHTML = `<p class="note" style="margin-top:0">기준 NPV ${eok(base)} · IRR ${pct(s.base.irrEq)}</p>` + s.rows.map(r => {
     const lo = Math.min(r.low, r.high) - base, hi = Math.max(r.low, r.high) - base;
-    return `<div class="brow" style="grid-template-columns:11em minmax(0,1fr) 13em"><span>${r.name}</span><div style="position:relative;height:24px;background:var(--soft);border-radius:6px"><i style="position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--ink)"></i><i class="c3" style="position:absolute;top:3px;bottom:3px;right:50%;width:${Math.abs(Math.min(0, lo)) / span * 50}%"></i><i class="c5" style="position:absolute;top:3px;bottom:3px;left:50%;width:${Math.max(0, hi) / span * 50}%"></i></div><span class="v">${eok(r.low)} ~ ${eok(r.high)}</span></div>`;
+    return `<div class="brow sens"><span>${r.name}</span><div style="position:relative;height:24px;background:var(--soft);border-radius:6px"><i style="position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--ink)"></i><i class="c3" style="position:absolute;top:3px;bottom:3px;right:50%;width:${Math.abs(Math.min(0, lo)) / span * 50}%"></i><i class="c5" style="position:absolute;top:3px;bottom:3px;left:50%;width:${Math.max(0, hi) / span * 50}%"></i></div><span class="v">${eok(r.low)} ~ ${eok(r.high)}</span></div>`;
   }).join('');
 }
 let CSV = '';
