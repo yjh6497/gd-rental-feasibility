@@ -24,7 +24,7 @@ const DEF = {
     { t: '36형', e: 36, s: 50.8, n: 60, b: 24, mkt: 13000, sd: 2500, sm: 50, cd: 2700, cm: 240000, cnt: 0 },
     { t: '44형', e: 44, s: 61.6, n: 40, b: 29, mkt: 16000, sd: 4000, sm: 55, cd: 3300, cm: 300000, cnt: 0 }
   ],
-  survey: { sameUmd: false, months: 12, apt: true, rh: true, offi: true, band: 5, trim: 10 },
+  survey: { sameUmd: false, months: 12, apt: true, rh: true, offi: true, sh: false, band: 5, trim: 10 },
   rent: { rate: 6.0, depRate: 3.0, tong: [10, 15, 25, 25, 15, 10], happy: [30, 20, 30, 10, 10, 0], kukRegion: 1.0, kukSpecial: 'none', youngShare: 50, youngGrade: '101268,2015', buyPct: 50 },
   cost: { direct: 35000, designP: 3, superP: 3, otherP: 5, contP: 3, land: 3000, finCost: 500, struct: 0, sash: 0, island: 0, stdAdd: 0 },
   fin: { gov: 13000, loc: 3000, inv: 0, loan: 9000, ink: 3000, bond: 5000, loanRate: 2.0, loanGrace: 10, loanTerm: 30, bondRate: 3.8 },
@@ -84,7 +84,7 @@ const FIELDS = {
     ['survey.band', '면적 허용 범위 (±)', '㎡'],
     ['survey.trim', '이상치 제외 (상·하위 각)', '%'],
     ['rent.rate', '시장전환율', '%'],
-    ['survey.sameUmd', '같은 읍면동 사례만', 'chk'], ['survey.apt', '아파트', 'chk'], ['survey.rh', '연립·다세대', 'chk'], ['survey.offi', '오피스텔', 'chk']
+    ['survey.sameUmd', '같은 읍면동 사례만', 'chk'], ['survey.apt', '아파트', 'chk'], ['survey.rh', '연립·다세대', 'chk'], ['survey.offi', '오피스텔', 'chk'], ['survey.sh', '단독·다가구', 'chk']
   ],
   'f-cost': [
     ['cost.direct', '직접공사비 (실제)', '백만원'], ['cost.designP', '설계비', '%'], ['cost.superP', '감리비', '%'], ['cost.otherP', '부대비 (인입·부담금 등)', '%'],
@@ -140,6 +140,7 @@ const HOW = {
   'survey.trim': '너무 비싸거나 싼 거래를 빼는 비율. 상·하위 각 10%면 가운데 80%만 평균합니다.',
   'rent.rate': '그 지역 실제 전월세 전환율(%). 시세 조사 탭에서 실거래가를 조회하면 같은 단지 전세·월세 거래로 전환율을 추정해 주고, "시장전환율에 적용"으로 바로 넣을 수 있습니다. 한국부동산원 통계값을 직접 넣어도 됩니다.',
   'survey.months': '고시 기준은 최근 1년. 사례가 적으면 24개월로 늘려 보세요.',
+  'survey.sh': '단독·다가구는 전용면적이 아니라 건물 연면적으로 신고되어 면적 비교가 부정확합니다. 군 지역처럼 아파트 거래가 적을 때만 보조로 켜세요.',
   'survey.sameUmd': '개요 탭에서 고른 읍면동과 같은 법정동 거래만 씁니다. 사례가 너무 적으면 끄세요(고시 기준은 같거나 인접한 시·군·구).',
   'rent.depRate': '국민·영구임대 임대료 산식의 1년 만기 정기예금 이율(%).',
   'rent.kukRegion': '춘천 같은 도청소재지는 2권역(1.0), 그 밖의 시·군은 3권역(0.85).',
@@ -459,7 +460,8 @@ async function api(path, opt = {}) {
   return j;
 }
 $('btnFetch').addEventListener('click', async () => {
-  const types = ['apt', 'rh', 'offi'].filter(t => S.survey[t]).join(',');
+  const types = ['apt', 'rh', 'offi', 'sh'].filter(t => S.survey[t]).join(',');
+  if (!types) { $('svMsg').textContent = '조회할 주택유형을 하나 이상 체크하세요.'; return; }
   if (!/^\d{5}$/.test(S.meta.lawd)) { $('svMsg').textContent = '개요 탭에서 시군구 코드(숫자 5자리)를 먼저 넣으세요.'; return; }
   $('svMsg').textContent = '국토교통부 실거래가를 조회하는 중입니다… (월·유형별로 나눠 불러 10~30초 걸릴 수 있습니다)';
   try {
@@ -774,6 +776,7 @@ function boot() {
   if (!GW.some(g => g[0] === S.meta.lawd)) S.meta.lawd = '51110';
   if (S.meta.umd === undefined) S.meta.umd = '';
   if (S.survey.sameUmd === undefined) S.survey.sameUmd = false;
+  if (S.survey.sh === undefined) S.survey.sh = false;
   buildFields(); fillFields(); unitTable(); SV = null; drawSurvey();
   $('svList').innerHTML = '';
   update(); health().then(() => { loadList(); loadUmd(S.meta.lawd); });
