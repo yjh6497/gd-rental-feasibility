@@ -27,16 +27,24 @@ export function ymList(months, now = new Date()) {
   return out;
 }
 
+const sleep = ms => new Promise(s => setTimeout(s, ms));
+// 동시에 n개씩만 실행
+export async function pool(tasks, n = 3) { const out = []; let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < tasks.length) { const k = i++; out[k] = await tasks[k](); } })); return out; }
+
 export async function fetchMonth(key, type, lawd, ym) {
   const [svc, op] = EP[type];
   const items = [];
   for (let page = 1; page <= 10; page++) {
     const url = `https://apis.data.go.kr/1613000/${svc}/${op}?serviceKey=${encodeURIComponent(key)}&LAWD_CD=${lawd}&DEAL_YMD=${ym}&pageNo=${page}&numOfRows=1000`;
-    const r = await fetch(url);
-    const xml = await r.text();
-    const code = tag(xml, ['resultCode']);
+    let r, xml, code, msg;
+    for (let tryN = 0; tryN < 4; tryN++) {           // 초당 요청 제한에 걸리면 잠깐 쉬고 다시
+      r = await fetch(url); xml = await r.text();
+      code = tag(xml, ['resultCode']); msg = tag(xml, ['resultMsg', 'returnAuthMsg']) || '';
+      if (!/요청제한|LIMITED|429/i.test(msg + r.status)) break;
+      await sleep(400 * (tryN + 1) + Math.random() * 300);
+    }
     if (!r.ok || (code && !/^0+$/.test(code))) {
-      throw new Error(`${EP[type][2]} ${ym}: ${tag(xml, ['resultMsg', 'returnAuthMsg']) || r.status}`);
+      throw new Error(`${EP[type][2]} ${ym}: ${/등록되지 않은|SERVICE_KEY_IS_NOT_REGISTERED/i.test(msg) ? '이 자료는 아직 활용신청(승인)되지 않았습니다' : msg || r.status}`);
     }
     const blocks = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
     for (const b of blocks) {
@@ -71,7 +79,7 @@ export default async function handler(req, res) {
   const yms = ymList(months);
   const errors = [];
   const jobs = [];
-  for (const t of types) for (const ym of yms) jobs.push(fetchMonth(key, t, lawd, ym).catch(e => { errors.push(e.message); return []; }));
-  const rows = (await Promise.all(jobs)).flat();
+  for (const t of types) for (const ym of yms) jobs.push(() => fetchMonth(key, t, lawd, ym).catch(e => { errors.push(e.message); return []; }));
+  const rows = (await pool(jobs, 3)).flat();
   send(res, 200, { lawd, months: yms, types, count: rows.length, errors, rows });
 }
