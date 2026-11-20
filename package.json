@@ -1,0 +1,8 @@
+{
+  "name": "public-housing-feasibility",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "공공임대주택 사업성 분석 도구 (Vercel)",
+  "engines": { "node": ">=18" }
+}

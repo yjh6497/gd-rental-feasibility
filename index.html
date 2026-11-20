@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>강원개발공사 공공임대 사업성 분석</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=Red+Hat+Display:wght@700;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: 지방공사 공공임대 사업 담당자가 투자심사 전 사업성을 검토하는 업무 도구
+   IDEA 사업계획서의 "재원조달·수지분석" 장 — 총사업비가 재원으로 쪼개지고 연도별 현금흐름이 쌓이는 한 장
+   PICTURE 수익성 탭의 누적 현금흐름 곡선과 핵심 지표, 재원 탭의 재원 구성 막대
+   COLOUR oxford blue #0b1f4b 띠, 흰 패널, magenta #e0115f 결과/적자, 초록 #1f9d55 흑자; 밤 #070f26
+   TYPE Red Hat Display(숫자) + IBM Plex Sans KR
+   LAYOUT 노트북: 좌 입력 / 우 결과(고정), 휴대폰: 결과 먼저 */
+:root{color-scheme:light dark;--bg:light-dark(#f4f5f8,#070f26);--panel:light-dark(#fff,#0f1d3d);--ink:light-dark(#0b1424,#e8ecf6);--mute:light-dark(#566079,#9aa6c2);--line:light-dark(#d9dde7,#263559);--navy:#0b1f4b;--mag:#e0115f;--sky:light-dark(#3b6fd8,#7fa6ff);--soft:light-dark(#e8edf8,#16264b);--ok:#1f9d55}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 "IBM Plex Sans KR",system-ui,sans-serif;overflow-x:clip}
+.top{background:var(--navy);color:#fff;padding:22px max(4vw,16px) 0}
+.wrap{max-width:1280px;margin:0 auto}
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+h1{font:800 clamp(28px,4vw,42px)/1.05 "Red Hat Display","IBM Plex Sans KR",sans-serif;letter-spacing:-.02em;margin:0 0 6px}
+.org{margin:0 0 4px;font-size:14px;color:#c9d3ec}
+.lead{margin:0 0 14px;color:#c9d3ec;max-width:72ch;font-size:15px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.bar input{background:#14295e;border:1px solid #2b4482;color:#fff;min-width:16em}
+.bar .btn{background:#fff;color:var(--navy);border-color:#fff}
+.bar .ghost{background:transparent;color:#fff;border-color:#4a64a8}
+.status{font-size:13px;color:#c9d3ec}
+.status b{font-weight:500;color:#fff}
+.tabs{display:flex;flex-wrap:wrap;gap:4px}
+.tabs button{font:500 15px "IBM Plex Sans KR",sans-serif;min-height:44px;padding:0 14px;border:0;border-radius:10px 10px 0 0;background:#1a3270;color:#dbe3f7;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--bg);color:var(--ink)}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--mag);outline-offset:2px}
+main{padding:22px max(4vw,16px) 48px}
+.view{display:none}.view.on{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:20px;align-items:start}
+.view.wide.on{grid-template-columns:minmax(0,1fr)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.panel+.panel{margin-top:14px}
+.panel h2{font:700 19px/1.3 "IBM Plex Sans KR",sans-serif;margin:0 0 12px}
+.res{position:sticky;top:12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px}
+label{font-size:14px;color:var(--mute)}
+.f{margin-bottom:6px}.f>div{margin-top:4px}
+input,select{width:100%;font:16px "IBM Plex Sans KR",sans-serif;min-height:42px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink)}
+input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
+.unit{position:relative}.unit input{padding-right:58px}.unit span{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--mute);pointer-events:none}
+.btn{min-height:42px;padding:0 16px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:500 15px "IBM Plex Sans KR",sans-serif;cursor:pointer}
+.btn.pri{background:var(--navy);color:#fff;border-color:var(--navy)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.big{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5em,1fr));gap:12px;margin:4px 0 14px}
+.big div{border-top:4px solid var(--sky);padding-top:6px}
+.big div.neg{border-top-color:var(--mag)}.big div.pos{border-top-color:var(--ok)}
+.big b{display:block;font:800 clamp(22px,2.8vw,32px)/1.1 "Red Hat Display",sans-serif;letter-spacing:-.02em;white-space:nowrap;font-variant-numeric:tabular-nums}
+.big small{color:var(--mute);font-size:13px}
+.bars{margin:8px 0 12px}
+.brow{display:grid;grid-template-columns:8em minmax(0,1fr) 7.5em;gap:10px;align-items:center;margin:7px 0;font-size:14px}
+.track{height:24px;background:var(--soft);border-radius:6px;overflow:hidden;display:flex}
+.track i{display:block;height:100%}
+.brow .v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.c1{background:#9aa6c2}.c2{background:#2c4a9a}.c3{background:var(--mag)}.c4{background:var(--sky)}.c5{background:var(--ok)}.c6{background:#f0a020}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--mute)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:500;color:var(--mute);font-size:13px}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td.neg{color:var(--mag)}
+.scroll{overflow-x:auto}
+.tbl input{min-height:36px;padding:5px 7px;min-width:5em}
+.note{font-size:14px;color:var(--mute);margin:8px 0 0}
+.warn{font-size:14px;border-left:4px solid var(--mag);padding:6px 10px;margin:8px 0 0;background:color-mix(in srgb,var(--mag) 8%,transparent)}
+.ok{border-left-color:var(--ok);background:color-mix(in srgb,var(--ok) 9%,transparent)}
+.info{border-left-color:var(--sky);background:color-mix(in srgb,var(--sky) 8%,transparent)}
+.warn small{color:var(--mute)}
+.fig{position:relative;height:300px}.fig svg{position:absolute;inset:0;width:100%;height:100%}
+svg text{font:12px "IBM Plex Sans KR",sans-serif;fill:var(--mute);paint-order:stroke;stroke:var(--panel);stroke-width:4px}
+.q{display:inline-grid;place-items:center;width:20px;height:20px;margin-left:5px;border-radius:50%;border:1px solid var(--sky);background:transparent;color:var(--sky);font:700 12px/1 sans-serif;cursor:pointer;vertical-align:1px;position:relative;padding:0}
+.q::after{content:"";position:absolute;inset:-12px}
+.q[aria-expanded=true]{background:var(--sky);color:var(--panel)}
+.pop{font-size:14px;line-height:1.5;color:var(--ink);background:var(--soft);border-left:4px solid var(--sky);border-radius:8px;padding:8px 12px;margin:4px 0 6px}
+.pop b{display:block;margin-bottom:2px}
+.pop .opts{margin:2px 0 0;padding-left:18px}.pop .opts li{margin:2px 0}.pop .opts li.on{font-weight:600;color:var(--ink)}
+.guide{background:var(--soft);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}
+.guide summary{cursor:pointer;font-weight:700}
+.guide ol{margin:6px 0 2px;padding-left:20px}
+.law article{border-top:1px solid var(--line);padding:12px 0}
+.law h3{margin:0 0 4px;font-size:16px}.law p{margin:4px 0;max-width:90ch;font-size:15px}
+.dialog{position:fixed;inset:0;background:rgba(5,10,30,.55);display:none;place-items:center;z-index:50;padding:16px}
+.dialog.on{display:grid}.dialog .panel{max-width:440px;width:100%}
+.foot{font-size:13px;color:var(--mute);max-width:1280px;margin:0 auto;padding:0 max(4vw,16px) 32px}
+@media(max-width:900px){.view.on{grid-template-columns:minmax(0,1fr)}.res{position:static;order:-1}}
+@media(max-width:600px){.grid,.grid3{grid-template-columns:minmax(0,1fr)}.brow{grid-template-columns:5.5em minmax(0,1fr) 6.5em}.tabs button{padding:0 10px;font-size:14px}table{font-size:13px}.bar input{min-width:0;flex:1}}
+
+/* ---------- 쉬운 사용: 요약 띠, 단계 이동, 움직임 ---------- */
+.prog{height:3px;background:#1a3270;margin-top:-1px}.prog i{display:block;height:100%;width:16.6%;background:var(--mag);transition:width .45s cubic-bezier(.2,.8,.2,1)}
+.strip{position:sticky;top:0;z-index:20;display:flex;gap:6px 18px;align-items:center;overflow-x:auto;scrollbar-width:none;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:9px max(4vw,16px);margin:-22px calc(-1 * max(4vw,16px)) 18px}
+.strip::-webkit-scrollbar{display:none}
+.strip .it{flex:0 0 auto;white-space:nowrap;display:flex;flex-direction:column;line-height:1.15}
+.strip small{font-size:12px;color:var(--mute)}
+.strip b{font:800 18px/1.1 "Red Hat Display","IBM Plex Sans KR",sans-serif;font-variant-numeric:tabular-nums;border-radius:4px}
+.strip .neg b{color:var(--mag)}.strip .pos b{color:var(--ok)}
+.verdict{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;border:0;border-right:1px solid var(--line);border-radius:0;padding:4px 18px 4px 0;font:700 17px "IBM Plex Sans KR",sans-serif;cursor:pointer;color:var(--ok);background:none;transition:color .35s}
+.verdict:hover{text-decoration:underline;text-underline-offset:4px}.verdict.mid{color:#b86e00}.verdict.neg{color:var(--mag)}
+.verdict::before{content:"";width:9px;height:9px;border-radius:2px;background:currentColor}
+.res{top:72px}
+.stepnav{grid-column:1/-1;display:flex;justify-content:space-between;gap:10px;margin-top:4px}
+.stepnav .btn{min-height:48px;padding:0 20px}.stepnav .nx{margin-left:auto}
+.btn{transition:transform .12s,box-shadow .2s,background .2s,border-color .2s}
+.btn:active{transform:scale(.97)}
+.btn:hover{border-color:var(--sky)}
+.btn.pri:hover{background:#163377;border-color:#163377}
+input,select{transition:border-color .2s,box-shadow .2s}
+input:hover,select:hover{border-color:color-mix(in srgb,var(--sky) 55%,var(--line))}
+input:focus,select:focus{border-color:var(--sky);box-shadow:0 0 0 3px color-mix(in srgb,var(--sky) 20%,transparent);outline:none}
+.tabs button{transition:background .2s,color .2s}.tabs button:hover:not([aria-selected=true]){background:#24408a;color:#fff}
+.panel{transition:box-shadow .25s}
+.big b.chg,.strip b.chg{animation:chg 1s ease-out}
+.pop{animation:popIn .22s ease-out;transform-origin:top left}
+.guide summary{list-style:none;display:flex;align-items:center;gap:8px}.guide summary::-webkit-details-marker{display:none}
+.guide summary::before{content:"";width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .2s;margin-right:2px}
+.guide[open] summary::before{transform:rotate(45deg)}
+.guide[open] ol{animation:fadeDown .25s ease-out}
+.dialog.on{animation:fade .2s ease-out}.dialog.on .panel{animation:popIn .25s cubic-bezier(.2,.8,.2,1)}
+.view.enter .track i{animation:grow .8s cubic-bezier(.2,.8,.2,1) both;transform-origin:left}
+.view.enter .fig polyline{stroke-dasharray:1;animation:draw 1.2s ease-out both}
+#toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:60;background:var(--navy);color:#fff;border-radius:12px;padding:12px 18px;font-size:15px;box-shadow:0 8px 30px rgba(5,10,30,.3);transition:opacity .25s,transform .3s cubic-bezier(.2,.8,.2,1);max-width:min(92vw,560px)}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+@keyframes viewIn{from{opacity:0;transform:translateY(8px)}}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+@keyframes grow{from{transform:scaleX(0)}}
+@keyframes draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes fade{from{opacity:0}}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-4px)}}
+@keyframes popIn{from{opacity:0;transform:scale(.97) translateY(-4px)}}
+@keyframes chg{0%{background:color-mix(in srgb,var(--sky) 30%,transparent)}100%{background:transparent}}
+@keyframes pulse{50%{opacity:.35}}
+@media(max-width:900px){.strip{gap:6px 14px}.strip b{font-size:16px}}
+
+/* 위계: 입력은 종이 위 양식, 결과만 한 장의 검토서 */
+.view>div:first-child>.panel{background:none;border:0;border-radius:0;padding:0 0 26px}
+.view>div:first-child>.panel+.panel{margin-top:0}
+.view>div:first-child>.panel>h2,.view>div:first-child>.panel>details+h2{font-size:17px;padding-bottom:8px;border-bottom:2px solid light-dark(var(--navy),var(--sky));margin-bottom:14px}
+.panel.res,.view>.panel{border:0;border-top:4px solid light-dark(var(--navy),var(--sky));border-radius:6px;box-shadow:0 1px 2px rgba(11,31,75,.06),0 14px 34px -14px rgba(11,31,75,.22)}
+input,select,.btn{border-radius:6px}
+.guide{background:none;border:1px dashed var(--line);border-radius:6px}
+.big div{border-top-width:3px}
+.fig .gain{fill:color-mix(in srgb,var(--ok) 16%,transparent)}.fig .loss{fill:color-mix(in srgb,var(--mag) 13%,transparent)}
+.fig .pbline{stroke:var(--mag);stroke-dasharray:4 4}
+.view.enter .fig .shade{animation:fade .5s .7s both}
+.view.enter .fig .pb{animation:popIn .35s 1.15s both;transform-box:fill-box;transform-origin:center bottom}
+.status span+span::before{content:"";display:inline-block;width:1px;height:11px;background:#4a64a8;margin:0 10px;vertical-align:-1px}
+@media(max-width:600px){.top{padding-top:16px}.bar input{flex:1 0 100%}.bar .btn{min-height:38px;padding:0 12px;font-size:14px}.tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;mask-image:linear-gradient(90deg,#000 85%,transparent)}.tabs::-webkit-scrollbar{display:none}.tabs button{flex:0 0 auto}.res{top:auto}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+<div class="head"><div><p class="org">강원개발공사 내부 업무용</p><h1>공공임대주택 사업성 분석</h1>
+<div class="bar"><input id="projName" aria-label="사업명"><button class="btn" id="btnSave">사업 저장</button><button class="btn ghost" id="btnNew">새 사업</button><button class="btn ghost" id="btnExport">파일로 내보내기</button><label class="btn ghost" style="display:inline-flex;align-items:center;color:#fff">파일 불러오기<input type="file" id="fileImport" accept=".json" hidden></label><button class="btn ghost" id="btnSet" aria-haspopup="dialog">⚙ 설정</button><button class="btn ghost" id="btnPass">접근코드</button><span class="status" id="status"></span></div>
+<nav class="tabs" role="tablist">
+<button role="tab" data-v="ov" aria-selected="true">1. 사업 개요</button>
+<button role="tab" data-v="sv" aria-selected="false">2. 시세 조사</button>
+<button role="tab" data-v="rn" aria-selected="false">3. 임대수입</button>
+<button role="tab" data-v="tc" aria-selected="false">4. 총사업비</button>
+<button role="tab" data-v="fd" aria-selected="false">5. 재원 조달</button>
+<button role="tab" data-v="ev" aria-selected="false">6. 수익성</button>
+<button role="tab" data-v="cp" aria-selected="false">사업 비교</button>
+<button role="tab" data-v="lw" aria-selected="false">법령 근거</button>
+</nav><div class="prog" aria-hidden="true"><i id="progBar"></i></div></div></header>
+
+<main><div class="wrap">
+<div class="strip" id="strip" aria-label="핵심 지표"></div>
+
+<section class="view on" id="v-ov">
+<div>
+<div class="panel"><details class="guide" open><summary>이 탭에서 할 일</summary><ol><li>사업 위치(시군구), 공급 유형, 분석 기간을 고릅니다.</li><li>세대 타입별 전용·공급면적, 세대수, 지하면적을 넣습니다.</li><li>다음 탭부터 이 정보로 시세·임대료·공사비가 계산됩니다. 입력칸 옆 ?를 누르면 넣는 법과 근거가 나옵니다.</li></ol></details>
+<h2>사업 기본 정보</h2><div class="grid" id="f-meta"></div></div>
+<div class="panel"><h2>세대 타입</h2><div class="scroll"><table class="tbl" id="unitTbl"><thead><tr><th>타입명</th><th>주거전용㎡</th><th>주택공급㎡</th><th>세대수</th><th>세대당 지하㎡</th><th></th></tr></thead><tbody></tbody></table></div>
+<div class="row"><button class="btn" id="addUnit">타입 추가</button></div>
+<p class="note">주택공급㎡ = 주거전용 + 주거공용(그 밖의 공용면적 제외). 세대당 지하㎡ = 사업계획승인을 받은 지하층 면적(지하주차장 포함, 지하피트 제외) ÷ 세대수. 넣어 둔 값은 예시입니다.</p></div>
+</div>
+<div class="panel res"><h2>사업 요약</h2><div class="big" id="ovBig"></div><div id="ovSum"></div></div>
+</section>
+
+<section class="view" id="v-sv">
+<div>
+<div class="panel"><details class="guide" open><summary>이 탭에서 할 일</summary><ol><li>조회 기간·주택유형을 고르고 "실거래가 조회"를 누릅니다(국토교통부 전월세 실거래가 API).</li><li>타입별로 전용면적 ±범위 안의 사례를 모아 전세 환산 평균을 냅니다.</li><li>결과가 맞으면 "임대시세로 적용"을 누릅니다. API가 연결되지 않았으면 오른쪽 표에 시세를 직접 넣어도 됩니다.</li></ol></details>
+<h2>조회 조건</h2><div class="grid" id="f-survey"></div>
+<div class="row"><button class="btn pri" id="btnFetch">실거래가 조회</button><button class="btn" id="btnApply">임대시세로 적용</button></div>
+<p class="note" id="svMsg">고시 제2조: 같거나 인접한 시·군·구에서 규모·생활여건이 비슷한 주택의 최근 1년 전세·월세 계약 사례를 조사하고, 시장전환율로 전액 보증금으로 환산한 값이 임대시세입니다.</p></div>
+<div class="panel"><h2>면적별 사례 분포</h2><div class="fig" id="svFig"></div><p class="note">가로: 전용면적(㎡), 세로: 전세 환산 금액(만원). 점 하나가 거래 1건입니다.</p></div>
+</div>
+<div class="panel res"><h2>타입별 임대시세</h2><div class="scroll"><table class="tbl" id="mktTbl"><thead><tr><th>타입</th><th class="n">사례</th><th class="n">평균 보증금</th><th class="n">평균 월세</th><th>전세 환산 시세 (만원)</th></tr></thead><tbody></tbody></table></div><div id="svList"></div></div>
+</section>
+
+<section class="view" id="v-rn">
+<div>
+<div class="panel"><details class="guide" open><summary>이 탭에서 할 일</summary><ol><li>공급 유형(개요 탭)에 맞는 산정 조건이 아래에 나옵니다.</li><li>통합·행복은 입주자 구성 비율, 국민·영구는 권역·수급자 비율 등을 넣습니다.</li><li>오른쪽에 타입별 표준임대보증금·월임대료와 사업 전체 임대수입이 나옵니다.</li></ol></details>
+<h2 id="rnTitle">임대료 산정 조건</h2><div class="grid" id="f-rent"></div><div id="mixBox"></div></div>
+</div>
+<div class="panel res"><h2>임대수입</h2><div class="big" id="rnBig"></div><div class="scroll"><table id="rnTbl"></table></div><p class="note" id="rnNote"></p></div>
+</section>
+
+<section class="view" id="v-tc">
+<div>
+<div class="panel"><details class="guide" open><summary>이 탭에서 할 일</summary><ol><li>실제 공사비(직접공사비)와 설계·감리·부대비·예비비 비율, 택지비, 건설 중 금융비용을 넣습니다.</li><li>표준건축비 상한은 세대 타입과 층수로 자동 계산됩니다. 실제 건축비가 상한을 넘으면 임대료·분양전환 산정에는 상한까지만 인정됩니다.</li></ol></details>
+<h2>공사비와 부대비</h2><div class="grid" id="f-cost"></div></div>
+<div class="panel"><h2>표준건축비 가산 (별표 7)</h2><div class="grid" id="f-std"></div></div>
+</div>
+<div class="panel res"><h2>총사업비</h2><div class="big" id="tcBig"></div><div class="bars" id="tcBars"></div><div class="scroll"><table id="tcTbl"></table></div></div>
+</section>
+
+<section class="view" id="v-fd">
+<div>
+<div class="panel"><details class="guide" open><summary>이 탭에서 할 일</summary><ol><li>국고·지방비·기금 출자·융자·현물출자·사채를 넣습니다. 임대보증금은 임대수입 탭에서 자동으로 들어옵니다.</li><li>공사 자체자금은 총사업비에서 나머지를 뺀 부족분으로 자동 계산됩니다.</li><li>공사 재무 수치를 넣으면 사채 한도·출자 한도·타당성 검토 대상 여부를 점검합니다.</li></ol></details>
+<h2>재원 구성</h2><div class="grid" id="f-fin"></div></div>
+<div class="panel"><h2>기금 융자 담보</h2><div class="grid" id="f-col"></div></div>
+<div class="panel"><h2>지방공사 재무 요건</h2><div class="grid" id="f-corp"></div><p class="note">재무 수치는 공사의 직전 사업연도 결산값을 넣으세요. 넣어 둔 값은 예시입니다.</p></div>
+</div>
+<div class="panel res"><h2>재원 조달 구조</h2><div class="big" id="fdBig"></div><div class="bars" id="fdBars"></div><div class="legend" id="fdLegend"></div><h2 style="margin-top:16px">법령 요건 점검</h2><div id="fdChk"></div></div>
+</section>
+
+<section class="view" id="v-ev">
+<div>
+<div class="panel"><details class="guide" open><summary>이 탭에서 할 일</summary><ol><li>운영비·임대료 상승·공가율 등 운영 가정을 넣습니다.</li><li>할인율과 분석 종료 시 처리(보유·매각·분양전환)를 고릅니다.</li><li>오른쪽에서 NPV·IRR·회수기간과 누적 현금흐름을, 아래에서 연도별 운영수지표와 민감도를 봅니다.</li></ol></details>
+<h2>운영 가정</h2><div class="grid" id="f-op"></div></div>
+<div class="panel"><h2>평가 기준과 종료 시 처리</h2><div class="grid" id="f-eval"></div></div>
+</div>
+<div class="panel res"><h2 id="evTitle">수익성</h2><div class="big" id="evBig"></div><div class="fig" id="evFig"></div><div class="legend"><span><i class="c3"></i>공사 관점 누적 현금흐름</span><span><i class="c4"></i>사업 전체 누적 현금흐름</span></div><div id="evChk"></div></div>
+<div class="panel" style="grid-column:1/-1"><h2>민감도 분석 (공사 관점 NPV)</h2><div id="sens"></div><p class="note">각 변수를 불리한 쪽(분홍)과 유리한 쪽(초록)으로 바꿨을 때 NPV가 기준값에서 얼마나 움직이는지 보여 줍니다.</p></div>
+<div class="panel" style="grid-column:1/-1"><h2>연도별 운영수지표</h2><div class="row" style="margin-top:0"><button class="btn" id="btnCSV">표 복사 (엑셀 붙여넣기용)</button><span class="note" id="csvMsg" style="margin:0"></span></div><div class="scroll" style="margin-top:10px"><table id="cfTbl"></table></div></div>
+</section>
+
+<section class="view wide" id="v-cp">
+<div class="panel"><h2>저장된 사업</h2><p class="note" id="cpMsg">저장된 사업을 불러오거나, 두 개 이상 체크해 지표를 나란히 비교합니다.</p><div class="row"><button class="btn" id="btnReload">목록 새로고침</button><button class="btn pri" id="btnCompare">선택한 사업 비교</button></div><div class="scroll" style="margin-top:10px"><table id="cpTbl"></table></div></div>
+<div class="panel"><h2>비교</h2><div class="scroll"><table id="cmpTbl"></table></div></div>
+</section>
+
+<section class="view wide law" id="v-lw"><div class="panel" id="lawBox"></div></section>
+
+</div></main>
+<p class="foot">강원개발공사 내부 업무용 참고 도구입니다. 투자심사·타당성 검토용 수치는 확정 설계·감정평가·그해 기금운용계획과 국토교통부 사업 지침 기준으로 다시 확인하세요. 실거래가: 국토교통부 실거래가 공개 API(공공데이터포털).</p>
+
+<div class="dialog" id="setDlg" role="dialog" aria-modal="true" aria-labelledby="setTitle"><div class="panel" style="max-width:640px"><h2 id="setTitle">설정 — 금액 단위</h2><p class="note" style="margin-top:0">보이는 단위만 바뀌고 저장된 값은 그대로입니다. 입력칸도 고른 단위로 바뀌어, 예를 들어 "억원"을 고르면 435.2처럼 억 단위로 넣으면 됩니다. 이 브라우저에 기억됩니다.</p><div id="setBody" style="margin-top:12px"></div><div class="row"><button class="btn pri" id="setOk">적용</button><button class="btn" id="setReset">기본값 (억원·백만원·원)</button><button class="btn" id="setCancel">닫기</button></div></div></div>
+<div class="dialog" id="passDlg"><div class="panel"><h2>접근코드</h2><p class="note">관리자가 Vercel 환경변수 APP_PASSCODE로 정한 코드를 넣으면 실거래가 조회와 사업 저장을 쓸 수 있습니다. 이 브라우저에만 저장됩니다.</p><div class="f" style="margin-top:10px"><input id="passIn" type="password" aria-label="접근코드" autocomplete="off"></div><div class="row"><button class="btn pri" id="passOk">확인</button><button class="btn" id="passCancel">닫기</button></div></div></div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
