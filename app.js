@@ -745,7 +745,8 @@ async function health() {
   try {
     const r = await fetch('/api/health'); const j = await r.json();
     serverOK = j.store; hasServer = true;
-    $('status').innerHTML = `<span>실거래가 API <b>${j.rentApi ? '연결됨' : '미설정'}</b></span><span>사업 저장소 <b>${j.store ? '연결됨' : '브라우저 저장'}</b></span><span>접근코드 <b>${!j.passcode ? '관리자 설정 필요' : pass() ? '입력됨' : '필요'}</b></span>`;
+    $('btnPass').hidden = !j.passcode;
+    $('status').innerHTML = `<span>실거래가 API <b>${j.rentApi ? '연결됨' : '미설정'}</b></span><span>사업 저장소 <b>${j.store ? '연결됨' : '브라우저 저장'}</b></span>${j.passcode ? `<span>접근코드 <b>${pass() ? '입력됨' : '필요'}</b></span>` : ''}`;
   } catch (e) { serverOK = false; $('status').innerHTML = '서버 없음 — 계산은 되고, 저장은 이 브라우저에 합니다.'; }
 }
 
