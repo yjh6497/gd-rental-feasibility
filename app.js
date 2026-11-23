@@ -1197,7 +1197,7 @@ function mktFor(rows, e, r) {
   const n0_ = a.length, cut = Math.floor(a.length * trim); if (a.length - 2 * cut >= 3) a = a.slice(cut, a.length - cut);
   return { cnt: n0_, conv: a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0 };
 }
-const REC_OPT = Object.assign({ max: 60, dem: 30 }, store.get('fs-recopt', {}));   // 한 평형 최대 비율(%), 수요 한도(1년 거래 건수 대비 %)
+const REC_OPT = Object.assign({ max: 60, dem: 30, fund: true, dscr: 0 }, store.get('fs-recopt', {}));   // 한 평형 최대 비율(%), 수요 한도(1년 거래 건수 대비 %)
 function recState(code, land, t, mix) {   // mix: [{e, sz, b, mk, n}]
   const U0 = S.units, eA = U0.reduce((a, u) => a + u.e * u.n, 0) || 1, s = clone(S);
   s.meta.lawd = code; s.meta.umd = ''; s.meta.addr = ''; s.meta.type = t; s.meta.period = Math.max(s.meta.period, FE.DUTY[t] >= 50 ? 50 : 30); s.eval.exit = 'hold'; rgCoef(s, code); landSet(s, land);
@@ -1205,6 +1205,28 @@ function recState(code, land, t, mix) {   // mix: [{e, sz, b, mk, n}]
   const eT = mix.reduce((a, m) => a + m.n * m.e, 0);
   ['gov', 'loc', 'inv', 'loan'].forEach(k => { s.fin[k] = Math.round(S.fin[k] * eT / eA); });   // 지원 단가는 평당 단가 × 평형 → 전용면적 합계에 비례
   return s;
+}
+// 재원 구성 최적화: 정부·지자체 지원(보조·출자)은 정책값으로 두고, 공사가 고를 수 있는 기금 융자·공사채·자체자금 비중을 조정
+function fundOpt(s0) {
+  const L0 = s0.fin.loan, K = S.corp, bondCap = Math.max(0, K.net * 4 - K.bondBal);   // 공사채: 순자산 4배 이내(지방공기업법 시행령 제62조 기준)
+  const base = FE.run(s0);
+  let best = { s: s0, R: base };
+  const okD = R => !REC_OPT.dscr || (R.Ev.minDSCR === null || R.Ev.minDSCR >= REC_OPT.dscr);
+  for (let i = 0; i <= 20; i++) {
+    const L = L0 * i / 20;
+    const s1 = clone(s0); s1.fin.loan = Math.round(L); s1.fin.bond = 0;
+    const own0 = FE.run(s1).Fd.own / M;                       // 사채 없이 남는 공사 자체자금(백만원)
+    const bMax = Math.max(0, Math.min(bondCap, own0));
+    for (let j = 0; j <= 10; j++) {
+      const s = clone(s1); s.fin.bond = Math.round(bMax * j / 10);
+      const R = FE.run(s);
+      if (R.Fd.own < -1e6 || !okD(R)) continue;
+      if (!best.ok || R.Ev.npvEq > best.R.Ev.npvEq) best = { s, R, ok: true };
+    }
+  }
+  const sl = clone(best.s); sl.fin.ink += sl.cost.land;           // 토지 현물출자를 받으면?
+  const landGain = sl.cost.land > 0 ? FE.run(sl).Ev.npvEq - best.R.Ev.npvEq : 0;
+  return { s: best.s, R: best.R, base, ok: !!best.ok, landGain, bondCap };
 }
 function recCalc(code, rows, land) {
   if (!rows) return { none: true };
@@ -1248,6 +1270,11 @@ function recCalc(code, rows, land) {
   if (cur && (!best || cur.npv >= best.npv)) best = cur;
   if (!best) return { none: true, blocked };
   if (!best.s) best.s = recState(code, land, best.t, best.mix);
+  if (REC_OPT.fund) {
+    const fo = fundOpt(best.s);
+    if (fo.ok) { best.fundBase = best.npv; best.s = fo.s; best.npv = fo.R.Ev.npvEq; best.irr = fo.R.Ev.irrEq; best.pay = fo.R.Ev.payback ? fo.R.Ev.payback - fo.R.Ev.Cy : null; best.dscr = fo.R.Ev.minDSCR; best.landGain = fo.landGain; best.own = fo.R.Fd.own; }
+    else best.fundFail = true;
+  }
   const main = best.mix.slice().sort((a, b) => b.n - a.n)[0];
   best.e = main.e; best.mk = main.mk;
   const deep = perE.slice().sort((a, b) => b.cnt - a.cnt)[0], rich = perE.slice().sort((a, b) => b.conv / b.e - a.conv / a.e)[0];
@@ -1262,6 +1289,11 @@ function recWhy(x) {
   if (x.bestSingle && !b.cur && b.mix.length > 1) { const d = b.npv - x.bestSingle.npv; parts.push(`한 평형만 짓는 최선안(${x.bestSingle.mix[0].e}㎡)보다 ${d >= 0 ? eok(d) + ' 낫습니다' : eok(-d) + ' 불리하지만 수요 한도 때문에 섞었습니다'}.`); }
   const d0 = x.base.thin ? NaN : b.npv - x.base.npv;
   parts.push(`공급 유형은 ${iGa(nm)} 유리합니다${isFinite(d0) && Math.abs(d0) >= 5e6 ? ` (지금 사업안보다 ${d0 >= 0 ? eok(d0) + ' 개선' : eok(-d0) + ' 불리'})` : ''}.`);
+  if (REC_OPT.fund && b.fundBase !== undefined) {
+    const F = b.s.fin, d = b.npv - b.fundBase;
+    parts.push(`재원은 기금 융자 ${eokTxt(F.loan * M)}(금리 ${F.loanRate}%)·공사채 ${eokTxt(F.bond * M)}(${F.bondRate}%)로 공사 자체자금을 ${eokTxt(Math.max(0, b.own))}까지 줄이는 구성이 가장 낫습니다${Math.abs(d) >= 5e6 ? ` (지금 재원 비율 그대로보다 ${eok(d)} 개선)` : ''}. 빌린 돈 금리가 할인율 ${S.eval.disc}%보다 낮기 때문입니다${b.dscr !== null && b.dscr !== undefined && b.dscr < 1 ? `. 다만 1년 빚 갚을 여력이 ${b.dscr.toFixed(2)}배라 매년 현금은 모자랍니다` : ''}.`);
+    if (b.landGain > 5e6) parts.push(`토지를 도·시 현물출자로 받으면 손익이 ${eok(b.landGain)} 더 좋아집니다(협의 필요).`);
+  } else if (b.fundFail) parts.push(`1년 빚 갚을 여력 ${REC_OPT.dscr}배 조건을 맞추는 재원 구성이 없어 지금 재원 비율을 썼습니다.`);
   if (b.npv < 0) parts.push('그래도 손해라 무상 지원 확대나 융자 축소가 함께 필요합니다.');
   return parts.join(' ');
 }
@@ -1269,12 +1301,12 @@ function rgRecDraw() {
   if (!RG || !RG.rec) { $('rgRecSum').innerHTML = ''; $('rgRec').innerHTML = ''; return; }
   const L = RG.rec.filter(x => !x.none).sort((a, b) => b.best.npv - a.best.npv), none = RG.rec.filter(x => x.none);
   const rec = L.filter(x => payReal(x.best.pay, x.best.s.meta.period)), top = L.find(x => x.best.mk.cnt >= 10) || L[0];
-  const ctl = `<div class="row" style="margin:0 0 12px;gap:14px"><label style="display:flex;gap:6px;align-items:center">한 평형 최대 <input type="text" inputmode="decimal" id="recMax" value="${REC_OPT.max}" style="width:4.5em;min-height:34px;text-align:right">%</label><label style="display:flex;gap:6px;align-items:center">평형별 공급 ≤ 1년 거래의 <input type="text" inputmode="decimal" id="recDem" value="${REC_OPT.dem}" style="width:4.5em;min-height:34px;text-align:right">%</label><button class="btn" id="recRe" style="min-height:34px">다시 계산</button></div>`;
+  const ctl = `<div class="row" style="margin:0 0 12px;gap:14px"><label style="display:flex;gap:6px;align-items:center">한 평형 최대 <input type="text" inputmode="decimal" id="recMax" value="${REC_OPT.max}" style="width:4.5em;min-height:34px;text-align:right">%</label><label style="display:flex;gap:6px;align-items:center">평형별 공급 ≤ 1년 거래의 <input type="text" inputmode="decimal" id="recDem" value="${REC_OPT.dem}" style="width:4.5em;min-height:34px;text-align:right">%</label><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="recFund" ${REC_OPT.fund ? 'checked' : ''} style="width:18px;min-height:18px"> 재원 구성도 최적화</label><label style="display:flex;gap:6px;align-items:center">1년 빚 갚을 여력 ≥ <input type="text" inputmode="decimal" id="recDscr" value="${REC_OPT.dscr}" style="width:4em;min-height:34px;text-align:right">배</label><button class="btn" id="recRe" style="min-height:34px">다시 계산</button></div>`;
   $('rgRecSum').innerHTML = ctl + `<div class="rgsum"><div class="${rec.length ? 'pos' : 'neg'}"><small>추천안으로 투자금 회수 가능</small><br><b>${rec.length}곳</b></div>${top ? `<div><small>가장 나은 추천안 (거래 10건 이상)</small><br><b>${top.name}</b> <span class="note">${FE.TYPE_NAME[top.best.t]} ${top.best.mix.map(m => m.e + '㎡ ' + m.n).join('·')}세대 · ${eok(top.best.npv)}</span></div>` : ''}</div>`
-    + `<p class="note" style="margin-top:0">시군마다 26·36·46·59㎡ 평형을 면적 10% 단위로 섞은 모든 구성 × 공급 유형 2가지(통합공공임대·행복주택), 그리고 지금 세대 구성까지 계산해 공사 손익이 가장 큰 평형 구성을 골랐습니다. 주택공급면적 합계는 지금 사업과 같게 두고, 국비·기금 지원은 실제 기준(평당 단가 × 평형)처럼 전용면적 합계에 비례하게 잡았습니다.</p>`;
+    + `<p class="note" style="margin-top:0">시군마다 26·36·46·59㎡ 평형을 면적 10% 단위로 섞은 모든 구성 × 공급 유형 2가지(통합공공임대·행복주택), 그리고 지금 세대 구성까지 계산해 공사 손익이 가장 큰 평형 구성을 고르고, 재원은 정부·지자체 지원(보조·출자)은 그대로 둔 채 기금 융자·공사채·자체자금 비중을 손익이 가장 좋게 맞췄습니다(공사채는 순자산 4배 이내). 주택공급면적 합계는 지금 사업과 같게 두고, 국비·기금 지원은 실제 기준(평당 단가 × 평형)처럼 전용면적 합계에 비례하게 잡았습니다.</p>`;
   const head = '<thead><tr><th>시군</th><th>추천 사업안</th><th class="n">세대당 월 임대료</th><th>최종 손익 (공사)</th><th class="n">투자금 회수</th><th>판단 근거</th><th></th></tr></thead>';
   const mx = Math.max(1, ...L.map(x => Math.abs(x.best.npv)));
-  $('rgRec').innerHTML = head + '<tbody>' + L.map(x => { const b = x.best; return `<tr class="${payReal(b.pay, b.s.meta.period) ? 'ok' : ''}"><td><b>${x.name}</b>${b.mk.cnt < 10 ? ' <small style="color:#b86e00">⚠ 거래 적음</small>' : ''}</td><td class="plan"><b>${FE.TYPE_NAME[b.t]} · 총 ${b.n}세대</b>${b.cur ? '지금 세대 구성 유지: ' : ''}${b.mix.map(m => `${m.e}㎡ ${m.n}세대`).join(' · ')}</td><td class="n">${won(b.rent)}</td>`
+  $('rgRec').innerHTML = head + '<tbody>' + L.map(x => { const b = x.best; return `<tr class="${payReal(b.pay, b.s.meta.period) ? 'ok' : ''}"><td><b>${x.name}</b>${b.mk.cnt < 10 ? ' <small style="color:#b86e00">⚠ 거래 적음</small>' : ''}</td><td class="plan"><b>${FE.TYPE_NAME[b.t]} · 총 ${b.n}세대</b>${b.cur ? '지금 세대 구성 유지: ' : ''}${b.mix.map(m => `${m.e}㎡ ${m.n}세대`).join(' · ')}<small style="display:block;color:var(--mute);margin-top:4px;white-space:normal;max-width:260px">재원 · 보조 ${eokTxt((b.s.fin.gov + b.s.fin.loc) * M)} · 기금 출자 ${eokTxt(b.s.fin.inv * M)} · 융자 ${eokTxt(b.s.fin.loan * M)} · 사채 ${eokTxt(b.s.fin.bond * M)}</small></td><td class="n">${won(b.rent)}</td>`
     + `<td><div style="display:flex;align-items:center;gap:8px"><div class="nbar"><i class="z"></i><i style="${b.npv >= 0 ? `left:50%;width:${b.npv / mx * 50}%;background:var(--ok)` : `right:50%;width:${-b.npv / mx * 50}%;background:var(--mag)`}"></i></div><span style="color:${b.npv < 0 ? 'var(--mag)' : 'var(--ok)'}">${eok(b.npv)}</span></div></td>`
     + `<td class="n">${payTxt(b.pay, b.s.meta.period)}</td><td class="why">${recWhy(x)}</td><td><button class="btn pri" data-recapply="${x.base.code}" style="min-height:34px;white-space:nowrap">사업개요부터 적용</button></td></tr>`; }).join('')
     + none.map(x => `<tr><td>${x.name}</td><td colspan="6" class="note">후보 평형 거래가 적거나 수요 한도에 걸려 추천할 구성이 없습니다 (조회 기간을 24개월로 늘리거나 수요 한도를 높여 보세요)</td></tr>`).join('') + '</tbody>';
@@ -1292,7 +1324,7 @@ document.addEventListener('click', e => {
 
 document.addEventListener('click', e => {
   if (e.target.id !== 'recRe' || !RG || !RG.rowsBy) return;
-  REC_OPT.max = Math.min(100, Math.max(10, parseFloat($('recMax').value) || 60)); REC_OPT.dem = Math.min(1000, Math.max(1, parseFloat($('recDem').value) || 30)); store.set('fs-recopt', REC_OPT);
+  REC_OPT.max = Math.min(100, Math.max(10, parseFloat($('recMax').value) || 60)); REC_OPT.dem = Math.min(1000, Math.max(1, parseFloat($('recDem').value) || 30)); REC_OPT.fund = $('recFund').checked; REC_OPT.dscr = Math.max(0, parseFloat($('recDscr').value) || 0); store.set('fs-recopt', REC_OPT);
   RG.rec = RG.out.map(o => ({ name: o.name, base: o, ...recCalc(o.code, RG.rowsBy[o.code], RG.landBy[o.code]) })); rgRecDraw(); toast('조건을 바꿔 추천 구성을 다시 계산했습니다.');
 });
 
