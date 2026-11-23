@@ -1258,7 +1258,7 @@ function recWhy(x) {
   else parts.push(`한 평형 최대 ${REC_OPT.max}%, 평형별 공급은 1년 거래의 ${REC_OPT.dem}% 이내 조건에서 손익이 가장 큰 구성입니다.`);
   if (x.bestSingle && !b.cur && b.mix.length > 1) { const d = b.npv - x.bestSingle.npv; parts.push(`한 평형만 짓는 최선안(${x.bestSingle.mix[0].e}㎡)보다 ${d >= 0 ? eok(d) + ' 낫습니다' : eok(-d) + ' 불리하지만 수요 한도 때문에 섞었습니다'}.`); }
   const d0 = x.base.thin ? NaN : b.npv - x.base.npv;
-  parts.push(`공급 유형은 ${iGa(nm)} 유리합니다${isFinite(d0) ? ` (지금 사업안보다 ${d0 >= 0 ? eok(d0) + ' 개선' : eok(-d0) + ' 불리'})` : ''}.`);
+  parts.push(`공급 유형은 ${iGa(nm)} 유리합니다${isFinite(d0) && Math.abs(d0) >= 5e6 ? ` (지금 사업안보다 ${d0 >= 0 ? eok(d0) + ' 개선' : eok(-d0) + ' 불리'})` : ''}.`);
   if (b.npv < 0) parts.push('그래도 손해라 무상 지원 확대나 융자 축소가 함께 필요합니다.');
   return parts.join(' ');
 }
