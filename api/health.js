@@ -4,6 +4,7 @@ export default function handler(req, res) {
   send(res, 200, {
     rentApi: !!process.env.DATA_GO_KR_KEY,
     store: !!process.env.BLOB_READ_WRITE_TOKEN || !!((process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) && (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN)),
-    passcode: !!process.env.APP_PASSCODE
+    passcode: !!process.env.APP_PASSCODE,
+    gemini: !!process.env.GEMINI_API_KEY
   });
 }

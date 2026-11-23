@@ -753,7 +753,7 @@ let hasServer = false;
 async function health() {
   try {
     const r = await fetch('/api/health'); const j = await r.json();
-    serverOK = j.store; hasServer = true;
+    serverOK = j.store; hasServer = true; hasGemini = !!j.gemini;
     $('btnPass').hidden = !j.passcode;
     $('status').innerHTML = `<span>실거래가 API <b>${j.rentApi ? '연결됨' : '미설정'}</b></span><span>사업 저장소 <b>${j.store ? '연결됨' : '브라우저 저장'}</b></span>${j.passcode ? `<span>접근코드 <b>${pass() ? '입력됨' : '필요'}</b></span>` : ''}`;
   } catch (e) { serverOK = false; $('status').innerHTML = '서버 없음 — 계산은 되고, 저장은 이 브라우저에 합니다.'; }
@@ -1024,6 +1024,108 @@ document.addEventListener('click', e => {
     $('v-ev').classList.toggle('imp', sb.dataset.sub === 'imp');
     if (sb.dataset.sub === 'imp') renderImprove(); else drawEv();
   }
+});
+
+// ---------- 문서로 자동 입력 (Gemini) ----------
+let DOC = null, hasGemini = false;
+const DOC_LBL = { name: '사업명', sgg: '시군', umd: '읍면동', addr: '상세 주소', type: '공급 유형', constr: '공사 기간', floor: '최고 층수', direct_won: '직접공사비', design_won: '설계비', supervision_won: '감리비', other_won: '부대비(인건비·관리비 등)', contingency_won: '예비비', land_won: '토지비', fincost_won: '건설 중 금융비용', gov_won: '국고 보조', loc_won: '지방비 보조·출자', inv_won: '주택도시기금 출자', loan_won: '주택도시기금 융자', ink_won: '지자체 현물출자', bond_won: '공사채 발행', loan_rate_pct: '기금 융자 금리', other_annual_won: '상가·부대시설 연 임대수입' };
+const fileB64 = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(f); });
+const fileText = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = no; r.readAsText(f); });
+const xmlText = xml => xml.replace(/<\/hp:tc>|<\/w:tc>/g, ' | ').replace(/<\/hp:tr>|<\/w:tr>/g, '\n').replace(/<\/hp:p>|<\/w:p>/g, '\n').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n');
+async function docPayload(f) {
+  const ext = (f.name.split('.').pop() || '').toLowerCase();
+  if (ext === 'hwp') throw new Error('한글(.hwp) 파일은 바로 읽을 수 없습니다. 한글에서 "다른 이름으로 저장"으로 HWPX나 PDF로 저장해 올려 주세요.');
+  if (ext === 'pdf') { if (f.size > 3e6) throw new Error('PDF가 3MB를 넘습니다. 필요한 쪽만 따로 저장해 올려 주세요.'); return { name: f.name, mime: 'application/pdf', data: await fileB64(f) }; }
+  if (ext === 'xlsx' || ext === 'xls') {
+    const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
+    const wb = XLSX.read(await f.arrayBuffer());
+    return { name: f.name, text: wb.SheetNames.map(n => `## 시트: ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n], { blankrows: false })).join('\n\n') };
+  }
+  if (ext === 'hwpx' || ext === 'docx') {
+    const JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm')).default;
+    const z = await JSZip.loadAsync(await f.arrayBuffer());
+    const names = Object.keys(z.files).filter(n => ext === 'hwpx' ? /^Contents\/section\d+\.xml$/i.test(n) : n === 'word/document.xml').sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (!names.length) throw new Error('문서 본문을 찾지 못했습니다.');
+    let t = ''; for (const n of names) t += xmlText(await z.file(n).async('string')) + '\n';
+    return { name: f.name, text: t };
+  }
+  return { name: f.name, text: await fileText(f) };
+}
+function docRows(res) {
+  const F = {}; (res.fields || []).forEach(x => { if (x && x.key && x.value !== '' && x.value != null) F[x.key] = x; });
+  const num = k => F[k] ? parseFloat(String(F[k].value).replace(/[^\d.\-]/g, '')) : NaN;
+  const rows = [], add = (key, lbl, cur, val, set) => rows.push({ key, lbl, cur, val, set, quote: F[key] ? F[key].quote || '' : '', on: String(cur) !== String(val) });
+  if (F.name) add('name', DOC_LBL.name, S.meta.name, F.name.value, s => { s.meta.name = F.name.value; });
+  if (F.sgg) { const g = GW.find(g => String(F.sgg.value).includes(g[1].slice(0, 2))); if (g) add('sgg', DOC_LBL.sgg, (GW.find(x => x[0] === S.meta.lawd) || [])[1], g[1], s => { s.meta.lawd = g[0]; }); }
+  if (F.umd) add('umd', DOC_LBL.umd, S.meta.umd, F.umd.value, s => { s.meta.umd = String(F.umd.value).trim(); });
+  if (F.addr) add('addr', DOC_LBL.addr, S.meta.addr, F.addr.value, s => { s.meta.addr = F.addr.value; });
+  if (F.type && FE.TYPE_NAME[F.type.value]) add('type', DOC_LBL.type, FE.TYPE_NAME[S.meta.type], FE.TYPE_NAME[F.type.value], s => { s.meta.type = F.type.value; const d = FE.DUTY[s.meta.type]; if (d) s.meta.period = d >= 50 ? 50 : 30; });
+  if (!isNaN(num('constr'))) add('constr', DOC_LBL.constr, S.meta.constr + '년', num('constr') + '년', s => { s.meta.constr = Math.max(1, Math.round(num('constr'))); });
+  if (!isNaN(num('floor'))) add('floor', DOC_LBL.floor, S.meta.floor + '층', num('floor') + '층', s => { s.meta.floor = Math.round(num('floor')); });
+  if (res.units && res.units.length) {
+    const U2 = res.units.filter(u => u && u.n > 0 && u.e > 0);
+    if (U2.length) add('units', '세대 타입', S.units.map(u => `${u.t} ${u.e}㎡ ${u.n}세대`).join(', '), U2.map(u => `${u.t || Math.round(u.e) + '형'} ${u.e}㎡(공급 ${u.s || '?'}㎡) ${u.n}세대`).join(', '),
+      s => { s.units = U2.map((u, i) => ({ ...(S.units[i] || S.units[0]), t: u.t || Math.round(u.e) + '형', e: +u.e, s: +(u.s || u.e * 1.4), n: Math.round(u.n), b: +(u.b || 0), cnt: 0 })); });
+  }
+  const W = k => num(k), M6 = v => Math.round(v / 1e6 * 100) / 100;
+  const direct = !isNaN(W('direct_won')) ? W('direct_won') : S.cost.direct * M;
+  const money = (k, path) => { if (isNaN(W(k))) return; add(k, DOC_LBL[k], eokTxt(getP(path) * M), eokTxt(W(k)), s => { const p = path.split('.'); s[p[0]][p[1]] = M6(W(k)); }); };
+  money('direct_won', 'cost.direct');
+  const pctOf = (k, path, base) => { if (isNaN(W(k))) return; const v = W(k) / base * 100; add(k, DOC_LBL[k] + ' (비율로 입력)', (+getP(path)).toFixed(2) + '%', `${eokTxt(W(k))} → ${v.toFixed(2)}%`, s => { const p = path.split('.'); s[p[0]][p[1]] = +v.toFixed(3); }); };
+  pctOf('design_won', 'cost.designP', direct); pctOf('supervision_won', 'cost.superP', direct); pctOf('other_won', 'cost.otherP', direct);
+  const subs = [W('design_won'), W('supervision_won'), W('other_won')].map(v => isNaN(v) ? 0 : v).reduce((a, b) => a + b, 0);
+  pctOf('contingency_won', 'cost.contP', direct + subs);
+  money('land_won', 'cost.land'); money('fincost_won', 'cost.finCost');
+  if (!isNaN(W('direct_won'))) {   // 사업비 내역이 있는 문서인데 빠진 항목은 0으로 (기본 예시값이 남지 않게)
+    [['design_won', 'cost.designP', '%'], ['supervision_won', 'cost.superP', '%'], ['other_won', 'cost.otherP', '%'], ['contingency_won', 'cost.contP', '%'], ['fincost_won', 'cost.finCost', '']].forEach(([k, path, u]) => {
+      if (!isNaN(W(k)) || !getP(path)) return;
+      add(k + '_zero', DOC_LBL[k], u ? (+getP(path)).toFixed(2) + '%' : eokTxt(getP(path) * M), '문서에 없음 → 0', s => { const p = path.split('.'); s[p[0]][p[1]] = 0; });
+    });
+  }
+  money('gov_won', 'fin.gov'); money('loc_won', 'fin.loc'); money('inv_won', 'fin.inv'); money('loan_won', 'fin.loan'); money('ink_won', 'fin.ink'); money('bond_won', 'fin.bond');
+  if (!isNaN(num('loan_rate_pct'))) add('loan_rate_pct', DOC_LBL.loan_rate_pct, S.fin.loanRate + '%', num('loan_rate_pct') + '%', s => { s.fin.loanRate = num('loan_rate_pct'); });
+  money('other_annual_won', 'op.other');
+  return rows;
+}
+function docOpen() {
+  $('docBody').innerHTML = `<p class="note" style="margin-top:0">사업계획서·검토보고서·내역서를 올리면 Gemini가 사업명, 위치, 세대 타입, 공사비, 재원을 찾아 줍니다. 찾은 값은 바로 들어가지 않고, 아래에서 확인한 뒤 고른 항목만 적용됩니다.</p>
+<div class="doc-drop" id="docDrop">PDF · 엑셀(xlsx) · 한글(hwpx) · 워드(docx) 파일을 여기에 끌어다 놓거나 "파일 고르기"를 누르세요.</div>
+${hasGemini ? '' : '<p class="warn">서버에 Gemini 인증키(GEMINI_API_KEY)가 아직 없습니다. 관리자가 Vercel 환경변수에 넣어야 쓸 수 있습니다.</p>'}
+<p class="note">무료 Gemini 키를 쓰면 올린 문서를 구글이 서비스 개선에 쓸 수 있습니다. 대외비 문서는 결제가 연결된 유료 키를 쓰거나 올리지 마세요.</p>`;
+  $('docApply').hidden = true; $('docDlg').classList.add('on'); $('docPick').focus();
+}
+async function docRun(f) {
+  $('docBody').innerHTML = `<p><span class="spin"></span><b>${f.name}</b> 읽는 중… (문서 크기에 따라 10~40초)</p>`;
+  $('docApply').hidden = true;
+  try {
+    const payload = await docPayload(f);
+    const res = await api('/api/extract', { method: 'POST', body: JSON.stringify(payload) });
+    DOC = { rows: docRows(res), res, name: f.name };
+    if (!DOC.rows.length) { $('docBody').innerHTML = `<p class="warn">「${f.name}」에서 입력할 만한 값을 찾지 못했습니다.</p>`; return; }
+    $('docBody').innerHTML = `<p class="note" style="margin-top:0">「${f.name}」에서 찾은 값입니다 (${res.model}). 근거 문장을 보고 맞는 항목만 체크된 채로 두세요.</p>
+<div class="scroll"><table id="docTbl"><thead><tr><th></th><th>항목</th><th>지금 값</th><th>문서 값</th><th>근거 (문서 원문)</th></tr></thead><tbody>${DOC.rows.map((r, i) => `<tr class="${r.on ? '' : 'same'}"><td><input type="checkbox" data-docrow="${i}" ${r.on ? 'checked' : ''} aria-label="${r.lbl} 적용" style="width:18px;min-height:18px"></td><td>${r.lbl}</td><td>${r.cur ?? ''}</td><td><b>${r.val}</b></td><td class="q">${(r.quote || '').replace(/</g, '&lt;')}</td></tr>`).join('')}</tbody></table></div>
+${(res.notes || []).length ? `<div class="warn info" style="margin-top:12px"><b>참고</b><br>${res.notes.map(n => String(n).replace(/</g, '&lt;')).join('<br>')}</div>` : ''}
+<p class="note">시세·임대 조건·운영 가정은 문서 대신 시세 조사 탭과 기본값을 씁니다. 적용 뒤에도 각 탭에서 고칠 수 있습니다.</p>`;
+    $('docApply').hidden = false; $('docApply').focus();
+  } catch (e) {
+    $('docBody').innerHTML = `<p class="warn">${!hasServer || !e.status && /fetch|Failed|NetworkError/i.test(e.message) ? '문서 자동 입력은 정식 사이트(배포 후)에서만 됩니다.' : e.message}</p>`;
+  }
+}
+$('btnDoc').addEventListener('click', docOpen);
+$('docPick').addEventListener('click', () => $('docFile').click());
+$('docClose').addEventListener('click', () => $('docDlg').classList.remove('on'));
+$('docDlg').addEventListener('keydown', e => { if (e.key === 'Escape') $('docDlg').classList.remove('on'); });
+$('docFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) docRun(f); });
+$('docDlg').addEventListener('dragover', e => { e.preventDefault(); const d = $('docDrop'); if (d) d.classList.add('on'); });
+$('docDlg').addEventListener('dragleave', () => { const d = $('docDrop'); if (d) d.classList.remove('on'); });
+$('docDlg').addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) docRun(f); });
+$('docApply').addEventListener('click', () => {
+  if (!DOC) return;
+  const s = clone(S); let n = 0;
+  document.querySelectorAll('[data-docrow]').forEach(c => { if (c.checked) { DOC.rows[+c.dataset.docrow].set(s); n++; } });
+  if (!n) { toast('적용할 항목을 하나 이상 고르세요.'); return; }
+  S = s; SV = null; buildFields(); fillFields(); unitTable(); update(); loadUmd(S.meta.lawd);
+  $('docDlg').classList.remove('on'); toast(`문서에서 ${n}개 항목을 넣었습니다. 시세 조사부터 차례로 확인하세요.`);
 });
 
 // ---------- 쉬운 사용: 요약 띠·판정, 단계 이동, 숫자 움직임 ----------
