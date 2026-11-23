@@ -874,7 +874,8 @@ function rgCalc(code, rows) {
 }
 async function rgRun(fresh) {
   const types = ['apt', 'rh', 'offi', 'sh'].filter(t => S.survey[t]).join(',') || 'apt';
-  const areas = S.units.map(u => u.e).join(',');
+  const areas = [...new Set([...S.units.map(u => u.e), ...REC_E])].sort((a, b) => a - b).join(',');
+  const rowsBy = {};
   rgStop = false; $('rgStop').hidden = false; $('rgRun').disabled = $('rgFresh').disabled = true;
   const out = [], fails = [];
   for (let i = 0; i < GW.length; i++) {
@@ -887,10 +888,10 @@ async function rgRun(fresh) {
       try { const j = await api(`/api/rent?lawd=${code}&months=${S.survey.months}&types=${types}&areas=${areas}&band=${S.survey.band}`); rows = j.rows; if (!j.errors.length) { try { store.set(key, { at: Date.now(), rows }); } catch (e) {} } }
       catch (e) { fails.push(name); if (!hasServer || !e.status) { $('rgMsg').textContent = '실거래 시세 조회는 정식 사이트(배포 후)에서만 됩니다.'; break; } continue; }
     }
-    out.push({ name, ...rgCalc(code, rows) });
+    rowsBy[code] = rows; out.push({ name, ...rgCalc(code, rows) });
   }
   $('rgBar').style.width = '100%'; $('rgStop').hidden = true; $('rgRun').disabled = $('rgFresh').disabled = false;
-  RG = { out, fails, types, at: new Date() };
+  RG = { out, fails, types, at: new Date(), rec: out.map(o => ({ name: o.name, base: o, ...recCalc(o.code, rowsBy[o.code]) })) };
   if (out.length) $('rgMsg').textContent = `${out.length}개 시군 계산 완료` + (fails.length ? ` · 조회 실패: ${fails.join(', ')}` : '') + (rgStop ? ' · 중지됨' : '');
   rgDraw();
 }
@@ -908,6 +909,7 @@ function rgDraw() {
       + `<td><div style="display:flex;align-items:center;gap:8px"><div class="nbar"><i class="z"></i><i style="${x.npv >= 0 ? `left:50%;width:${x.npv / mx * 50}%;background:var(--ok)` : `right:50%;width:${-x.npv / mx * 50}%;background:var(--mag)`}"></i></div><span class="${x.npv < 0 ? 'neg' : ''}" style="color:${x.npv < 0 ? 'var(--mag)' : 'var(--ok)'}">${eok(x.npv)}</span></div></td>`
       + `<td class="n">${pct(x.irr)}</td><td class="n">${x.pay !== null ? `운영 ${x.pay}년차` : '<span style="color:var(--mag)">미회수</span>'}</td><td class="n">${x.need === 0 ? '—' : x.need === null ? '총사업비 이상' : eok(x.need)}</td><td><button class="btn" data-rg="${x.code}" style="min-height:34px">이 시군으로 적용</button></td></tr>`;
   $('rgTbl').innerHTML = head + '<tbody>' + ok.map(row).join('') + RG.out.filter(x => x.thin).map(row).join('') + '</tbody>';
+  rgRecDraw();
   $('rgNote').textContent = `시세: 국토교통부 전월세 실거래(최근 ${S.survey.months}개월, ${RG.types.replace('apt', '아파트').replace('rh', '연립다세대').replace('offi', '오피스텔').replace('sh', '단독다가구')}), 타입 면적 ±${S.survey.band}㎡, 시장전환율 ${S.rent.rate}%. 국민임대 지역계수·영구임대 급지는 시군에 맞춰 바꿨습니다. ${RG.at.toLocaleString('ko-KR')} 기준.`;
 }
 $('rgRun').addEventListener('click', () => rgRun(false));
@@ -1140,6 +1142,71 @@ $('docApply').addEventListener('click', () => {
   if (!n) { toast('적용할 항목을 하나 이상 고르세요.'); return; }
   S = s; SV = null; buildFields(); fillFields(); unitTable(); update(); loadUmd(S.meta.lawd);
   $('docDlg').classList.remove('on'); toast(`문서에서 ${n}개 항목을 넣었습니다. 시세 조사부터 차례로 확인하세요.`);
+});
+
+// ---------- 지역별 추천 사업안: 시군 시세에 맞춰 유형·주력 평형을 바꿔 가며 최선안 탐색 ----------
+const REC_E = [26, 36, 46, 59];                 // 후보 주력 평형(주거전용㎡)
+const REC_T = ['tong', 'happy', 'kuk'];         // 후보 공급 유형
+function mktFor(rows, e, r) {
+  const band = S.survey.band, trim = S.survey.trim / 100;
+  let a = rows.filter(x => x.area > 0 && Math.abs(x.area - e) <= band).map(x => x.deposit + (r > 0 ? x.monthly * 12 / r : 0)).sort((p, q) => p - q);
+  const n0_ = a.length, cut = Math.floor(a.length * trim); if (a.length - 2 * cut >= 3) a = a.slice(cut, a.length - cut);
+  return { cnt: n0_, conv: a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0 };
+}
+function recCalc(code, rows) {
+  if (!rows) return { none: true };
+  const U0 = S.units, hh0 = U0.reduce((a, u) => a + u.n, 0) || 1, eA = U0.reduce((a, u) => a + u.e * u.n, 0) || 1;
+  const supply0 = U0.reduce((a, u) => a + u.s * u.n, 0), sR = supply0 / eA, bR = U0.reduce((a, u) => a + u.b * u.n, 0) / eA;
+  const tried = [];
+  for (const e of REC_E) {
+    const mk = mktFor(rows, e, S.rent.rate / 100); if (mk.cnt < 5) continue;
+    for (const t of REC_T) {
+      const s = clone(S), sz = Math.round(e * sR * 10) / 10, n = Math.max(1, Math.round(supply0 / sz));
+      s.meta.lawd = code; s.meta.umd = ''; s.meta.addr = ''; s.meta.type = t; s.meta.period = Math.max(s.meta.period, FE.DUTY[t] >= 50 ? 50 : 30); s.eval.exit = 'hold'; rgCoef(s, code);
+      s.units = [{ ...U0[0], t: `${e}형`, e, s: sz, n, b: Math.round(e * bR * 10) / 10, mkt: Math.round(mk.conv), cnt: mk.cnt }];
+      ['gov', 'loc', 'inv', 'loan'].forEach(k => { s.fin[k] = Math.round(S.fin[k] * (n * e) / eA); });   // 지원 단가는 평당 단가 × 평형이라 전용면적 합계에 비례
+      const R = FE.run(s);
+      tried.push({ s, e, t, n, mk, npv: R.Ev.npvEq, irr: R.Ev.irrEq, pay: R.Ev.payback ? R.Ev.payback - R.Ev.Cy : null, rent: R.Rn.annual / 12 / n });
+    }
+  }
+  if (!tried.length) return { none: true };
+  tried.sort((a, b) => b.npv - a.npv);
+  const best = tried[0], perE = REC_E.map(e => { const m = mktFor(rows, e, S.rent.rate / 100); return { e, ...m }; }).filter(m => m.cnt >= 5);
+  const deep = perE.slice().sort((a, b) => b.cnt - a.cnt)[0], rich = perE.slice().sort((a, b) => b.conv / b.e - a.conv / a.e)[0];
+  return { best, tried, perE, deep, rich };
+}
+function recWhy(x) {
+  const b = x.best, nm = FE.TYPE_NAME[b.t], d = b.npv - (x.base.thin ? NaN : x.base.npv);
+  const parts = [];
+  parts.push(`${b.e}㎡ 전월세 거래 ${n0(b.mk.cnt)}건, 전세 환산 ${n0(b.mk.conv)}만원(㎡당 ${n0(b.mk.conv / b.e)}만원).`);
+  if (x.deep && x.deep.e !== b.e) parts.push(`거래가 가장 많은 건 ${x.deep.e}㎡(${n0(x.deep.cnt)}건)지만 손익은 ${b.e}㎡가 더 낫습니다.`);
+  else if (x.deep) parts.push(`이 시군에서 거래가 가장 많은 평형입니다.`);
+  parts.push(`후보 ${x.tried.length}개 중 ${nm}이 가장 유리합니다${isFinite(d) ? ` (현재 사업안보다 ${d >= 0 ? eok(d) + ' 개선' : eok(-d) + ' 불리'})` : ''}.`);
+  if (b.npv < 0) parts.push('그래도 손해라 무상 지원 확대나 융자 축소가 함께 필요합니다.');
+  return parts.join(' ');
+}
+function rgRecDraw() {
+  if (!RG || !RG.rec) { $('rgRecSum').innerHTML = ''; $('rgRec').innerHTML = ''; return; }
+  const L = RG.rec.filter(x => !x.none).sort((a, b) => b.best.npv - a.best.npv), none = RG.rec.filter(x => x.none);
+  const rec = L.filter(x => x.best.pay !== null), top = L.find(x => x.best.mk.cnt >= 10) || L[0];
+  $('rgRecSum').innerHTML = `<div class="rgsum"><div class="${rec.length ? 'pos' : 'neg'}"><small>추천안으로 투자금 회수 가능</small><br><b>${rec.length}곳</b></div>${top ? `<div><small>가장 나은 추천안 (거래 10건 이상)</small><br><b>${top.name}</b> <span class="note">${FE.TYPE_NAME[top.best.t]} ${top.best.e}㎡ ${top.best.n}세대 · ${eok(top.best.npv)}</span></div>` : ''}</div>`
+    + `<p class="note" style="margin-top:0">시군마다 공급 유형 3가지(통합·행복·국민) × 주력 평형 4가지(26·36·46·59㎡)를 모두 계산해 공사 손익이 가장 좋은 안을 골랐습니다. 주택공급면적 합계는 지금 사업과 같게 두고, 국비·기금 지원은 실제 기준(평당 단가 × 평형)처럼 전용면적 합계에 비례하게 잡았습니다.</p>`;
+  const head = '<thead><tr><th>시군</th><th>추천 사업안</th><th class="n">세대당 월 임대료</th><th>최종 손익 (공사)</th><th class="n">투자금 회수</th><th>판단 근거</th><th></th></tr></thead>';
+  const mx = Math.max(1, ...L.map(x => Math.abs(x.best.npv)));
+  $('rgRec').innerHTML = head + '<tbody>' + L.map(x => { const b = x.best; return `<tr class="${b.pay !== null ? 'ok' : ''}"><td><b>${x.name}</b>${b.mk.cnt < 10 ? ' <small style="color:#b86e00">⚠ 거래 적음</small>' : ''}</td><td class="plan"><b>${FE.TYPE_NAME[b.t]}</b>${b.e}㎡ (공급 ${b.s.units[0].s}㎡) ${b.n}세대</td><td class="n">${won(b.rent)}</td>`
+    + `<td><div style="display:flex;align-items:center;gap:8px"><div class="nbar"><i class="z"></i><i style="${b.npv >= 0 ? `left:50%;width:${b.npv / mx * 50}%;background:var(--ok)` : `right:50%;width:${-b.npv / mx * 50}%;background:var(--mag)`}"></i></div><span style="color:${b.npv < 0 ? 'var(--mag)' : 'var(--ok)'}">${eok(b.npv)}</span></div></td>`
+    + `<td class="n">${b.pay !== null ? `운영 ${b.pay}년차` : '<span style="color:var(--mag)">미회수</span>'}</td><td class="why">${recWhy(x)}</td><td><button class="btn pri" data-recapply="${x.base.code}" style="min-height:34px;white-space:nowrap">사업개요부터 적용</button></td></tr>`; }).join('')
+    + none.map(x => `<tr><td>${x.name}</td><td colspan="6" class="note">후보 평형 모두 거래가 5건 미만이라 추천하지 않습니다 (조회 기간을 24개월로 늘려 보세요)</td></tr>`).join('') + '</tbody>';
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('.rgtabs [data-rgv]');
+  if (t) { document.querySelectorAll('.rgtabs [data-rgv]').forEach(b => b.setAttribute('aria-selected', b === t)); $('rgSame').hidden = t.dataset.rgv !== 'same'; $('rgRecBox').hidden = t.dataset.rgv !== 'rec'; return; }
+  const a = e.target.closest('[data-recapply]'); if (!a || !RG) return;
+  const x = RG.rec.find(r => r.base.code === a.dataset.recapply); if (!x || x.none) return;
+  const nm = x.name, b = x.best;
+  S = clone(b.s); S.meta.name = `${nm} ${FE.TYPE_NAME[b.t]} ${b.e}㎡ ${b.n}세대 (추천안)`; SV = null; projId = null; store.set('fs-current-id', null);
+  buildFields(); fillFields(); unitTable(); update(); loadUmd(S.meta.lawd); showLaw(false);
+  goTab('ov'); toast(`${nm} 추천 사업안을 사업 개요부터 넣었습니다. 각 탭을 확인한 뒤 "사업 저장"을 누르세요.`);
 });
 
 // ---------- 쉬운 사용: 요약 띠·판정, 단계 이동, 숫자 움직임 ----------

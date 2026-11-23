@@ -222,6 +222,7 @@ input,select,.btn{border-radius:6px}
 #docTbl tr.same td{color:var(--mute)}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--sky);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
+#rgRec td{vertical-align:top}#rgRec td.why{white-space:normal;min-width:260px;max-width:380px;font-size:13.5px;color:var(--mute)}#rgRec .plan b{display:block}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -307,11 +308,14 @@ input,select,.btn{border-radius:6px}
 </section>
 
 <section class="view wide" id="v-rg">
-<div class="panel"><h2>강원 18개 시군에서 같은 사업을 하면</h2>
-<p class="note" style="margin-top:0">지금 입력한 사업(세대 타입·공사비·재원·운영 가정)을 그대로 두고, 시군마다 실거래 시세만 바꿔 계산합니다. 토지비와 공사비는 시군별로 다르지 않다고 봅니다.</p>
+<div class="panel"><h2>강원 18개 시군 비교</h2>
+<p class="note" style="margin-top:0">시군마다 실거래 시세를 받아 두 가지로 봅니다. <b>현재 사업 그대로</b>는 입력한 사업을 시군만 바꿔 계산하고, <b>지역별 추천 사업안</b>은 그 시군 시세에 맞춰 공급 유형과 주력 평형을 바꿔 가며 가장 나은 안을 찾습니다. 토지비·공사비 총액과 세대당 지원 단가는 지금 입력값을 씁니다.</p>
 <div class="row"><button class="btn pri" id="rgRun">18개 시군 비교 실행</button><button class="btn" id="rgFresh">새로 조회</button><button class="btn" id="rgStop" hidden>중지</button><span class="note" id="rgMsg" style="margin:0"></span></div>
 <div class="prog" style="background:var(--soft);margin-top:10px;height:4px;border-radius:2px" aria-hidden="true"><i id="rgBar" style="width:0"></i></div></div>
-<div class="panel"><div id="rgSum"></div><div class="scroll"><table id="rgTbl"></table></div><p class="note" id="rgNote"></p></div>
+<div class="panel"><nav class="subtabs rgtabs" role="tablist" aria-label="지역 비교 보기" style="margin-bottom:14px"><button role="tab" data-rgv="same" aria-selected="true">현재 사업 그대로</button><button role="tab" data-rgv="rec" aria-selected="false">지역별 추천 사업안</button></nav>
+<div id="rgSame"><div id="rgSum"></div><div class="scroll"><table id="rgTbl"></table></div></div>
+<div id="rgRecBox" hidden><div id="rgRecSum"></div><div class="scroll"><table id="rgRec"></table></div></div>
+<p class="note" id="rgNote"></p></div>
 </section>
 
 <section class="view wide" id="v-cp">
