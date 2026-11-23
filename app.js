@@ -1256,7 +1256,7 @@ function recCalc(code, rows, land) {
   if (!sizes.length) return { none: true };
   const scales = String(TPL.scales).split(',').map(v => parseInt(v, 10)).filter(v => v > 0).sort((a, b) => a - b);
   const capOf = x => Math.floor(x.mk.cnt * yr * REC_OPT.dem / 100);       // 그 평형을 1년에 소화할 수 있는 세대수
-  let best = null, tried = 0, maxN = 0;
+  let best = null, tried = 0, maxN = 0; const top = [];
   const walk = (i, left, acc, N, t) => {
     if (i === sizes.length - 1) { if (left <= maxK) tryMix([...acc, left], N, t); return; }
     for (let k = 0; k <= Math.min(left, maxK); k++) walk(i + 1, left - k, [...acc, k], N, t);
@@ -1265,15 +1265,18 @@ function recCalc(code, rows, land) {
     const mix = [];
     for (let i = 0; i < sizes.length; i++) if (shares[i]) { const n = Math.round(N * shares[i] / 10); if (n < 1) return; if (n > capOf(sizes[i])) return; mix.push({ ...sizes[i], n, share: shares[i] * 10 }); }
     if (!mix.length) return;
-    const fo = fundOpt(recState(code, landU, t, mix)); tried++;
-    const R = fo.R, n = mix.reduce((a, m) => a + m.n, 0);
-    maxN = Math.max(maxN, n);
-    const r = { t, mix, n, s: fo.s, npv: R.Ev.npvEq, irr: R.Ev.irrEq, pay: R.Ev.payback ? R.Ev.payback - R.Ev.Cy : null, rent: R.Rn.annual / 12 / n, dscr: R.Ev.minDSCR, own: R.Fd.own, TC: R.C.TC, landGain: fo.landGain, fundBase: fo.base.Ev.npvEq };
-    if (!best || r.npv > best.npv) best = r;
+    const s = recState(code, landU, t, mix), R = FE.run(s); tried++;     // 1차: 융자 한도·사채 없음으로 빠르게 계산
+    const n = mix.reduce((a, m) => a + m.n, 0); maxN = Math.max(maxN, n);
+    top.push({ t, mix, n, s, npv: R.Ev.npvEq }); top.sort((a, b) => b.npv - a.npv); if (top.length > 4) top.pop();
   };
   const capSum = sizes.reduce((s, x) => s + capOf(x), 0), capN = Math.floor(capSum * 0.9 / 10) * 10;   // 수요가 작은 시군은 소화 가능한 만큼으로
   if (capN >= 20 && !scales.includes(capN) && capN < Math.max(...scales)) scales.push(capN);
   for (const N of scales) for (const t of REC_T) walk(0, 10, [], N, t);
+  for (const c of top) {                                                // 2차: 상위 후보만 재원 구성 최적화
+    const fo = fundOpt(c.s), R = fo.R;
+    const r = { t: c.t, mix: c.mix, n: c.n, s: fo.s, npv: R.Ev.npvEq, irr: R.Ev.irrEq, pay: R.Ev.payback ? R.Ev.payback - R.Ev.Cy : null, rent: R.Rn.annual / 12 / c.n, dscr: R.Ev.minDSCR, own: R.Fd.own, TC: R.C.TC, landGain: fo.landGain, fundBase: fo.base.Ev.npvEq };
+    if (!best || r.npv > best.npv) best = r;
+  }
   if (!best) return { none: true, perE, cap: sizes.map(x => `${x.e}㎡ ${capOf(x)}세대`).join(', ') };
   // 손익 0까지 필요한 추가 무상 지원
   let need = 0;
