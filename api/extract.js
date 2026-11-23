@@ -3,6 +3,8 @@
 import { send, checkPass, readBody } from './_lib.js';
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+const FALLBACK = (process.env.GEMINI_FALLBACK || 'gemini-3.5-flash,gemini-3.5-flash-lite').split(',').map(s => s.trim()).filter(Boolean);
+const sleep = ms => new Promise(s => setTimeout(s, ms));
 
 const PROMPT = `당신은 한국 지방공사의 공공임대주택 사업성 검토 담당자를 돕습니다.
 첨부 문서(사업계획서·검토보고서·내역서 등)에서 아래 항목을 찾아 JSON으로만 답하세요.
@@ -50,9 +52,9 @@ const SCHEMA = {
   required: ['fields']
 };
 
-async function callGemini(key, parts, withSchema) {
+async function callGemini(key, parts, withSchema, model) {
   const body = { contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json', ...(withSchema ? { responseSchema: SCHEMA } : {}) } };
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body)
   });
   const j = await r.json().catch(() => ({}));
@@ -75,10 +77,20 @@ export default async function handler(req, res) {
   else if (b.text) parts.push({ text: `파일명: ${b.name || ''}\n---\n${String(b.text).slice(0, 400000)}` });
   else return send(res, 400, { error: '읽을 내용이 없습니다.' });
   try {
-    let out;
-    try { out = await callGemini(key, parts, true); }
-    catch (e) { if (e.status === 400) out = await callGemini(key, parts, false); else throw e; }
-    send(res, 200, { model: MODEL, fields: out.fields || [], units: out.units || [], notes: out.notes || [] });
+    // 혼잡(429·503)이면 잠깐 쉬고 다시, 그래도 안 되면 다음 모델로
+    let out = null, used = '', last;
+    for (const model of [MODEL, ...FALLBACK.filter(m => m !== MODEL)]) {
+      for (let t = 0; t < 2 && !out; t++) {
+        try {
+          try { out = await callGemini(key, parts, true, model); }
+          catch (e) { if (e.status === 400) out = await callGemini(key, parts, false, model); else throw e; }
+          used = model;
+        } catch (e) { last = e; if (![429, 500, 503].includes(e.status) && e.status !== 404) throw e; if (e.status === 404) break; await sleep(1500 * (t + 1)); }
+      }
+      if (out) break;
+    }
+    if (!out) throw new Error('Gemini가 지금 붐벼서 읽지 못했습니다. 1~2분 뒤 다시 시도해 주세요.' + (last ? ` (${last.message})` : ''));
+    send(res, 200, { model: used, fields: out.fields || [], units: out.units || [], notes: out.notes || [] });
   } catch (e) {
     send(res, 502, { error: e.message });
   }
