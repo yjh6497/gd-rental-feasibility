@@ -311,18 +311,32 @@ function fillFields() {
   if ($('lawdShow')) $('lawdShow').value = S.meta.lawd;
   eokHelpers();
 }
+// "?" 설명: 버튼 옆에 작은 말풍선으로 띄움 (화면 밖으로 나가지 않게 위치 조정)
+let popBtn = null;
+function popClose() { document.querySelectorAll('.pop').forEach(p => p.remove()); if (popBtn) popBtn.setAttribute('aria-expanded', 'false'); popBtn = null; }
+function popPlace(p, b) {
+  const r = b.getBoundingClientRect(), W = Math.min(340, innerWidth - 24); p.style.width = W + 'px';
+  const ph = p.offsetHeight; let left = r.left + r.width / 2 - 28; left = Math.max(12, Math.min(left, innerWidth - W - 12));
+  const below = r.bottom + 10 + ph < innerHeight || r.top < ph + 20;
+  p.style.left = left + scrollX + 'px'; p.style.top = (below ? r.bottom + 10 : r.top - ph - 10) + scrollY + 'px';
+  p.classList.toggle('up', !below); p.style.setProperty('--ax', Math.max(14, Math.min(W - 14, r.left + r.width / 2 - left)) + 'px');
+}
 document.addEventListener('click', e => {
-  const b = e.target.closest('.q'); if (!b) return;
+  const b = e.target.closest('.q');
+  if (!b) { if (popBtn && !e.target.closest('.pop')) popClose(); return; }
   e.preventDefault();
-  const f = b.closest('.f'), open = f.querySelector('.pop'), k = b.dataset.h;
-  document.querySelectorAll('.pop').forEach(p => p.remove()); document.querySelectorAll('.q').forEach(x => x.setAttribute('aria-expanded', 'false'));
-  if (open && open.dataset.h === k) return;
-  const p = document.createElement('div'); p.className = 'pop'; p.dataset.h = k;
-  const cur = (f.querySelector('select') || {}).value;
+  const same = popBtn === b; popClose(); if (same) return;
+  const f = b.closest('.f'), k = b.dataset.h;
+  const p = document.createElement('div'); p.className = 'pop'; p.dataset.h = k; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', '설명'); p.id = 'pop-' + k.replace('.', '-');
+  const cur = f ? (f.querySelector('select') || {}).value : undefined;
   const opt = OPT[k] ? `<b style="margin-top:6px">선택지</b><ul class="opts">${OPT[k].map(([v, t]) => `<li${v === cur ? ' class="on"' : ''}>${v === cur ? '✓ ' : ''}${t}</li>`).join('')}</ul>` : '';
-  p.innerHTML = (HOW[k] ? `<b>넣는 법</b>${HOW[k]}` : '') + opt + (LAW[k] ? `<b style="margin-top:6px">근거</b>${LAW[k]}` : '');
-  b.parentElement.querySelector('div').after(p); b.setAttribute('aria-expanded', 'true');
+  p.innerHTML = `<button type="button" class="pop-x" aria-label="닫기">×</button>` + (HOW[k] ? `<b>넣는 법</b>${HOW[k]}` : '') + opt + (LAW[k] ? `<b style="margin-top:6px">근거</b>${LAW[k]}` : '');
+  document.body.appendChild(p); popPlace(p, b); b.setAttribute('aria-expanded', 'true'); b.setAttribute('aria-controls', p.id); popBtn = b;
+  p.querySelector('.pop-x').addEventListener('click', () => { const bb = popBtn; popClose(); if (bb) bb.focus(); });
 });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && popBtn) { const bb = popBtn; popClose(); bb.focus(); } });
+addEventListener('resize', () => { const p = document.querySelector('.pop'); if (p && popBtn) popPlace(p, popBtn); });
+document.addEventListener('click', e => { if (e.target.closest('.tabs button,.subtabs button')) popClose(); }, true);
 
 // ---------- 세대 타입 표 ----------
 const UCOLS = [['t', 'text'], ['e', 'number'], ['s', 'number'], ['n', 'number'], ['b', 'number']];

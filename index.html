@@ -89,7 +89,10 @@ svg text{font:12px "IBM Plex Sans KR",sans-serif;fill:var(--mute);paint-order:st
 .q{display:inline-grid;place-items:center;width:20px;height:20px;margin-left:5px;border-radius:50%;border:1px solid var(--sky);background:transparent;color:var(--sky);font:700 12px/1 sans-serif;cursor:pointer;vertical-align:1px;position:relative;padding:0}
 .q::after{content:"";position:absolute;inset:-12px}
 .q[aria-expanded=true]{background:var(--sky);color:var(--panel)}
-.pop{font-size:14px;line-height:1.5;color:var(--ink);background:var(--soft);border-left:4px solid var(--sky);border-radius:8px;padding:8px 12px;margin:4px 0 6px}
+.pop{position:absolute;z-index:40;font-size:13.5px;line-height:1.5;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--sky);border-radius:8px;padding:10px 30px 10px 12px;box-shadow:0 10px 28px -8px rgba(11,31,75,.32);max-height:min(60vh,420px);overflow-y:auto}
+.pop::before{content:"";position:absolute;top:-9px;left:var(--ax,20px);width:12px;height:12px;background:var(--sky);transform:translateX(-50%) rotate(45deg);z-index:-1}
+.pop.up{border-top:1px solid var(--line);border-bottom:3px solid var(--sky)}.pop.up::before{top:auto;bottom:-9px}
+.pop-x{position:absolute;top:4px;right:6px;width:24px;height:24px;border:0;background:none;color:var(--mute);font-size:18px;line-height:1;cursor:pointer;border-radius:4px}.pop-x:hover{background:var(--soft);color:var(--ink)}
 .pop b{display:block;margin-bottom:2px}
 .pop .opts{margin:2px 0 0;padding-left:18px}.pop .opts li{margin:2px 0}.pop .opts li.on{font-weight:600;color:var(--ink)}
 .guide{background:var(--soft);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}
@@ -129,7 +132,7 @@ input:focus,select:focus{border-color:var(--sky);box-shadow:0 0 0 3px color-mix(
 .tabs button{transition:background .2s,color .2s}.tabs button:hover:not([aria-selected=true]){background:#24408a;color:#fff}
 .panel{transition:box-shadow .25s}
 .big b.chg,.strip b.chg{animation:chg 1s ease-out}
-.pop{animation:popIn .22s ease-out;transform-origin:top left}
+.pop{animation:popIn .16s ease-out;transform-origin:top left}
 .guide summary{list-style:none;display:flex;align-items:center;gap:8px}.guide summary::-webkit-details-marker{display:none}
 .guide summary::before{content:"";width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .2s;margin-right:2px}
 .guide[open] summary::before{transform:rotate(45deg)}
