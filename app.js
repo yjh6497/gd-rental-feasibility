@@ -11,6 +11,9 @@ const fmtU = (v, unit, dp) => (v / UNITS[unit]).toLocaleString('ko-KR', { minimu
 const eok = v => fmtU(v, U.kpi, U.kpiDp) + U.kpi;            // 요약 지표
 const mil = v => fmtU(v, U.grid, U.gridDp);                     // 표 숫자 (단위는 머리글에)
 const won = v => fmtU(v, U.hh, U.hhDp) + U.hh;                 // 세대별 금액
+const NUMF = v => (v === '' || v === null || v === undefined || !isFinite(v)) ? '' : Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 6 });
+const numOf = el => parseFloat(String(el.value).replace(/,/g, '')) || 0;
+const eokTxt = won => (won / 1e8).toLocaleString('ko-KR', { maximumFractionDigits: 2 }) + '억원';
 const GRID_IN = 1e6;                                            // 상태값 저장 단위(금액)
 const pct = (v, d = 1) => v === null || !isFinite(v) ? '산출 불가' : (v * 100).toLocaleString('ko-KR', { maximumFractionDigits: d }) + '%';
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
@@ -288,7 +291,7 @@ function fieldHTML([p, label, u]) {
   let ctl;
   if (u === 'list') ctl = `<input id="${id}" data-p="${p}" list="gwList" inputmode="numeric" autocomplete="off"><datalist id="gwList">${GW.map(g => `<option value="${g[0]}">${g[1]}</option>`).join('')}</datalist>`;
   else if (u && u.sel) ctl = `<select id="${id}" data-p="${p}">${u.sel.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`;
-  else ctl = `<div class="unit"><input id="${id}" data-p="${p}" type="number" step="any"${u === '백만원' ? ' data-money="1"' : ''}><span>${u === '백만원' ? U.grid : u}</span></div>`;
+  else ctl = `<div class="unit"><input id="${id}" data-p="${p}" type="text" inputmode="decimal" autocomplete="off" data-num="1"${u === '백만원' ? ' data-money="1"' : ''}><span>${u === '백만원' ? U.grid : u}</span></div>${u === '백만원' ? `<small class="eok" data-eok="${p}"></small>` : ''}`;
   const q = HOW[p] || LAW[p] || OPT[p] ? `<button type="button" class="q" data-h="${p}" aria-expanded="false" aria-label="${label} 넣는 법과 근거">?</button>` : '';
   return `<div class="f"><label for="${id}">${label}</label>${q}<div>${ctl}</div></div>`;
 }
@@ -300,11 +303,13 @@ function fillFields() {
     if (el === document.activeElement) return;
     const v = getP(el.dataset.p);
     if (el.type === 'checkbox') el.checked = !!v;
-    else if (el.dataset.money && v !== '' && v !== null && isFinite(v)) el.value = +(v * GRID_IN / UNITS[U.grid]).toFixed(6);
+    else if (el.dataset.money && v !== '' && v !== null && isFinite(v)) el.value = NUMF(+(v * GRID_IN / UNITS[U.grid]).toFixed(6));
+    else if (el.dataset.num) el.value = NUMF(v);
     else el.value = v ?? '';
   });
   if (document.activeElement !== $('projName')) $('projName').value = S.meta.name;
   if ($('lawdShow')) $('lawdShow').value = S.meta.lawd;
+  eokHelpers();
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('.q'); if (!b) return;
@@ -332,9 +337,9 @@ document.addEventListener('input', onEdit); document.addEventListener('change', 
 function onEdit(e) {
   const t = e.target;
   if (t.dataset.p) {
-    let v = t.type === 'checkbox' ? t.checked : t.value;
+    let v = t.type === 'checkbox' ? t.checked : t.dataset.num ? String(t.value).replace(/,/g, '') : t.value;
     const cur = getP(t.dataset.p);
-    if (t.type === 'number' || (typeof cur === 'number' && t.tagName === 'SELECT')) v = parseFloat(v) || 0;
+    if (t.type === 'number' || t.dataset.num || (typeof cur === 'number' && t.tagName === 'SELECT')) v = parseFloat(v) || 0;
     if (t.dataset.money && t.value !== '') v = v * UNITS[U.grid] / GRID_IN;
     else if (t.dataset.money) v = t.dataset.p === 'corp.pubL' ? '' : 0;
     setP(t.dataset.p, v);
@@ -344,9 +349,9 @@ function onEdit(e) {
   } else if (t.dataset.u !== undefined) {
     S.units[+t.dataset.u][t.dataset.c] = t.type === 'number' ? (parseFloat(t.value) || 0) : t.value;
   } else if (t.dataset.mix !== undefined) {
-    S.rent[t.dataset.mix][+t.dataset.i] = parseFloat(t.value) || 0;
+    S.rent[t.dataset.mix][+t.dataset.i] = numOf(t);
   } else if (t.dataset.mk !== undefined) {
-    S.units[+t.dataset.mk][t.dataset.c] = parseFloat(t.value) || 0;
+    S.units[+t.dataset.mk][t.dataset.c] = numOf(t);
   } else if (t.id === 'projName') { S.meta.name = t.value; }
   else return;
   if (SV && t.dataset.p && /^(survey|rent\.rate)/.test(t.dataset.p)) processSurvey();
@@ -364,7 +369,7 @@ const chk = list => list.map(x => `<p class="warn ${x[0]}">${x[1]}${x[2] ? `<br>
 let R = null;
 function update(src) {
   R = FE.run(S);
-  renderOv(); renderSvTable(src); renderRn(src); renderTc(); renderFd(); renderEv(); renderStrip(); tweenNums();
+  renderOv(); renderSvTable(src); renderRn(src); renderTc(); renderFd(); renderEv(); renderStrip(); tweenNums(); eokHelpers();
   store.set('fs-current', S);
 }
 
@@ -387,7 +392,7 @@ function renderSvTable(src) {
   if (src && src.dataset && src.dataset.mk !== undefined) return;
   $('mktTbl').tBodies[0].innerHTML = S.units.map((u, i) => {
     const s = SV && SV.per[i];
-    return `<tr><td>${u.t}<br><small style="color:var(--mute)">${u.e}㎡</small></td><td class="n">${s ? s.cnt : (u.cnt || '-')}</td><td class="n">${s ? n0(s.dep) : n0(u.sd)}만</td><td class="n">${s ? n0(s.mon) : n0(u.sm)}만</td><td><div class="unit"><input type="number" step="any" data-mk="${i}" data-c="mkt" value="${u.mkt}" aria-label="${u.t} 전세 환산 시세"><span>만원</span></div>${s ? `<small style="color:var(--mute)">조회값 ${n0(s.conv)}만원</small>` : ''}</td></tr>`;
+    return `<tr><td>${u.t}<br><small style="color:var(--mute)">${u.e}㎡</small></td><td class="n">${s ? s.cnt : (u.cnt || '-')}</td><td class="n">${s ? n0(s.dep) : n0(u.sd)}만</td><td class="n">${s ? n0(s.mon) : n0(u.sm)}만</td><td><div class="unit"><input type="text" inputmode="decimal" autocomplete="off" data-num="1" data-mk="${i}" data-c="mkt" value="${NUMF(u.mkt)}" aria-label="${u.t} 전세 환산 시세"><span>만원</span></div><small class="eok">= ${eokTxt(u.mkt * 1e4)}</small>${s ? `<small style="color:var(--mute)">조회값 ${n0(s.conv)}만원</small>` : ''}</td></tr>`;
   }).join('');
 }
 // 실거래로 전월세전환율 추정: 같은 단지·같은 면적의 전세 중앙값과 월세 거래를 짝지어
@@ -500,7 +505,7 @@ function renderRn(src) {
       const G = t === 'tong' ? FE.TONG : FE.HAPPY;
       mix = `<h2 style="margin-top:14px">${t === 'tong' ? '입주자 소득구간 구성' : '공급대상 구성'} (%)</h2><table class="tbl"><thead><tr><th>${t === 'tong' ? '소득구간' : '공급대상'}</th><th class="n">계수</th><th>비율</th></tr></thead><tbody>${G.map((g, i) => `<tr><td>${g[0]}</td><td class="n">${g[1].toFixed(2)}</td><td><div class="unit"><input type="number" step="any" data-mix="${t}" data-i="${i}" value="${Rr[t][i]}" aria-label="${g[0]} 비율"><span>%</span></div></td></tr>`).join('')}</tbody></table><p class="note">예상 입주자 구성 비율을 넣으면 가중평균 계수로 계산합니다. ${t === 'tong' ? '통합공공임대 고시 제3조·제4조·제5조: 보증금 = 시세 × 계수 × 35%, 임대료 = 시세 × 계수 × 65% × 시장전환율.' : '행복주택 고시 제3조·제4조·제5조: 보증금 = 시세 × 계수 × 50%, 임대료 = 보증금 × 시장전환율.'}</p>`;
     }
-    if (t === 'custom') mix = `<h2 style="margin-top:14px">타입별 임대조건 직접 입력</h2><table class="tbl"><thead><tr><th>타입</th><th>보증금 (만원)</th><th>월임대료 (원)</th></tr></thead><tbody>${S.units.map((u, i) => `<tr><td>${u.t}</td><td><input type="number" step="any" data-mk="${i}" data-c="cd" value="${u.cd}" aria-label="${u.t} 보증금"></td><td><input type="number" step="any" data-mk="${i}" data-c="cm" value="${u.cm}" aria-label="${u.t} 월임대료"></td></tr>`).join('')}</tbody></table>`;
+    if (t === 'custom') mix = `<h2 style="margin-top:14px">타입별 임대조건 직접 입력</h2><table class="tbl"><thead><tr><th>타입</th><th>보증금 (만원)</th><th>월임대료 (원)</th></tr></thead><tbody>${S.units.map((u, i) => `<tr><td>${u.t}</td><td><input type="text" inputmode="decimal" autocomplete="off" data-num="1" data-mk="${i}" data-c="cd" value="${NUMF(u.cd)}" aria-label="${u.t} 보증금"></td><td><input type="text" inputmode="decimal" autocomplete="off" data-num="1" data-mk="${i}" data-c="cm" value="${NUMF(u.cm)}" aria-label="${u.t} 월임대료"></td></tr>`).join('')}</tbody></table>`;
     $('mixBox').innerHTML = mix;
     fillFields();
   }
@@ -899,6 +904,29 @@ document.addEventListener('click', e => {
   S.meta.lawd = x.code; S.meta.umd = ''; rgCoef(S, x.code); S.units.forEach((u, i) => { u.mkt = Math.round(x.mk[i].conv); u.cnt = x.mk[i].cnt; });
   SV = null; buildFields(); fillFields(); update(); toast(`${x.name} 시세로 바꿨습니다. 개요·수익성 탭에서 확인하세요.`); rgDraw();
 });
+
+// ---------- 숫자 입력칸: 세 자리마다 쉼표, 금액은 억원 환산을 작게 ----------
+function eokHelpers() {
+  document.querySelectorAll('.eok[data-eok]').forEach(el => {
+    const v = getP(el.dataset.eok);
+    el.textContent = U.grid === '억원' || v === '' || v === null || !isFinite(v) ? '' : '= ' + eokTxt(v * GRID_IN);
+  });
+}
+document.addEventListener('input', e => {
+  const t = e.target; if (!t.dataset || !t.dataset.num) return;
+  const raw = t.value, pos = t.selectionStart ?? raw.length;
+  const digitsBefore = raw.slice(0, pos).replace(/[^\d.-]/g, '').length;
+  const clean = raw.replace(/[^\d.-]/g, '');
+  if (clean === '' || clean === '-' || /\.\d*$/.test(clean) && clean.endsWith('.')) return;
+  const [ip, dp] = clean.split('.');
+  const neg = ip.startsWith('-'), ipd = ip.replace('-', '');
+  const fmt = (neg ? '-' : '') + (ipd ? Number(ipd).toLocaleString('ko-KR') : '0') + (dp !== undefined ? '.' + dp : '');
+  if (fmt === raw) return;
+  t.value = fmt;
+  let k = 0, c = 0; while (c < fmt.length && k < digitsBefore) { if (/[\d.-]/.test(fmt[c])) k++; c++; }
+  try { t.setSelectionRange(c, c); } catch (er) {}
+  const row = t.closest('td'); const s = row && row.querySelector('.eok:not([data-eok])'); if (s && t.dataset.c === 'mkt') s.textContent = "= " + eokTxt(numOf(t) * 1e4);
+}, true);
 
 // ---------- 쉬운 사용: 요약 띠·판정, 단계 이동, 숫자 움직임 ----------
 const REDUCE = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
