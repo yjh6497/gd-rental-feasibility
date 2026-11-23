@@ -223,6 +223,10 @@ input,select,.btn{border-radius:6px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--sky);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 #rgRec td{vertical-align:top}#rgRec td.why{white-space:normal;min-width:260px;max-width:380px;font-size:13.5px;color:var(--mute)}#rgRec .plan b{display:block}
+#tip{position:fixed;z-index:70;pointer-events:none;background:var(--navy);color:#fff;font-size:13px;line-height:1.45;padding:7px 10px;border-radius:6px;white-space:pre-line;box-shadow:0 6px 18px rgba(5,10,30,.28);opacity:0;transition:opacity .12s;max-width:280px;font-variant-numeric:tabular-nums}
+#tip.on{opacity:1}
+.track i{cursor:default}.track i:hover,.track i:focus{filter:brightness(1.12);outline:2px solid var(--ink);outline-offset:-2px}
+.fig rect.hov{fill:transparent}.fig rect.hov:hover{fill:color-mix(in srgb,var(--sky) 12%,transparent)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>

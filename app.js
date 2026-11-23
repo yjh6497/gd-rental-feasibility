@@ -375,7 +375,8 @@ function onEdit(e) {
 
 // ---------- 공용 그리기 ----------
 function bars(el, rows, max) {
-  el.innerHTML = rows.map(r => `<div class="brow"><span>${r.l}</span><div class="track">${r.p.map(p => `<i class="${p.c}" style="width:${max > 0 ? Math.max(0, p.v / max * 100) : 0}%" title="${p.n || ''}"></i>`).join('')}</div><span class="v">${r.v}</span></div>`).join('');
+  el.innerHTML = rows.map(r => { const tot = r.p.reduce((a, p) => a + Math.max(0, p.v), 0) || 1;
+    return `<div class="brow"><span>${r.l}</span><div class="track">${r.p.map(p => { const tip = `${p.n || r.l}: ${eok(p.v)}${r.p.length > 1 ? ` (${(p.v / tot * 100).toFixed(1)}%)` : ''}`; return `<i class="${p.c}" style="width:${max > 0 ? Math.max(0, p.v / max * 100) : 0}%" data-tip="${tip}" tabindex="0" aria-label="${tip}"></i>`; }).join('')}</div><span class="v">${r.v}</span></div>`; }).join('');
 }
 const big = items => items.map(([l, v, c]) => `<div class="${c || ''}"><small>${l}</small><b data-k="${l}">${v}</b></div>`).join('');
 const chk = list => list.map(x => `<p class="warn ${x[0]}">${x[1]}${x[2] ? `<br><small>${x[2]}</small>` : ''}</p>`).join('');
@@ -632,6 +633,8 @@ function drawEv() {
     const px = X(Ev.payback), py = Y(cumE[Ev.payback]), lab = `운영 ${Ev.payback - Ev.Cy}년차 회수`, right = px > W - 120;
     g += `<g class="pb"><line class="pbline" x1="${px}" x2="${px}" y1="${T}" y2="${H - B}"/><circle cx="${px}" cy="${py}" r="5.5" fill="var(--mag)" stroke="var(--panel)" stroke-width="2"/><text x="${px + (right ? -8 : 8)}" y="${T + 14}" text-anchor="${right ? 'end' : 'start'}" style="fill:var(--ink);font-weight:600">${lab}</text></g>`;
   } else g += `<text x="${W - Rm}" y="${T + 14}" text-anchor="end" style="fill:var(--mag);font-weight:600">분석 기간 안에 회수 안 됨</text>`;
+  const bw = (W - Lm - Rm) / Math.max(1, Ev.T);
+  for (let t = 0; t <= Ev.T; t++) g += `<rect class="hov" x="${(X(t) - bw / 2).toFixed(1)}" y="${T}" width="${bw.toFixed(1)}" height="${H - T - B}" data-tip="${t === 0 ? '착공 전' : t <= Ev.Cy ? `공사 ${t}년차` : `운영 ${t - Ev.Cy}년차`} 누적 현금흐름&#10;공사 관점: ${eok(cumE[t] || 0)}&#10;사업 전체: ${eok(cumP[t] || 0)}"/>`;
   evFig.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="누적 현금흐름">${g}</svg>`;
 }
 function renderSens() {
@@ -1292,6 +1295,21 @@ document.addEventListener('click', e => {
   REC_OPT.max = Math.min(100, Math.max(10, parseFloat($('recMax').value) || 60)); REC_OPT.dem = Math.min(1000, Math.max(1, parseFloat($('recDem').value) || 30)); store.set('fs-recopt', REC_OPT);
   RG.rec = RG.out.map(o => ({ name: o.name, base: o, ...recCalc(o.code, RG.rowsBy[o.code], RG.landBy[o.code]) })); rgRecDraw(); toast('조건을 바꿔 추천 구성을 다시 계산했습니다.');
 });
+
+// ---------- 그래프 말풍선: 막대·곡선에 올리면 금액 표시 ----------
+const tipEl = document.createElement('div'); tipEl.id = 'tip'; tipEl.setAttribute('role', 'tooltip'); document.body.appendChild(tipEl);
+function tipShow(el, x, y) {
+  tipEl.textContent = el.getAttribute('data-tip').replace(/&#10;/g, '\n'); tipEl.classList.add('on');
+  const r = tipEl.getBoundingClientRect(); let l = x + 14, t = y + 14;
+  if (l + r.width > innerWidth - 8) l = x - r.width - 14; if (t + r.height > innerHeight - 8) t = y - r.height - 14;
+  tipEl.style.left = Math.max(8, l) + 'px'; tipEl.style.top = Math.max(8, t) + 'px';
+}
+const tipHide = () => tipEl.classList.remove('on');
+document.addEventListener('mousemove', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) tipShow(el, e.clientX, e.clientY); else tipHide(); });
+document.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (!el) return; const r = el.getBoundingClientRect(); tipShow(el, r.left + r.width / 2, r.bottom); });
+document.addEventListener('focusout', tipHide);
+document.addEventListener('touchstart', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) { const p = e.touches[0]; tipShow(el, p.clientX, p.clientY - 40); } else tipHide(); }, { passive: true });
+addEventListener('scroll', tipHide, { passive: true });
 
 // ---------- 쉬운 사용: 요약 띠·판정, 단계 이동, 숫자 움직임 ----------
 const REDUCE = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
