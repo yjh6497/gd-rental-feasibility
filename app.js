@@ -805,6 +805,9 @@ function boot() {
 }
 
 // ---------- 법령 제한 경고창: 매각·분양전환 ----------
+const iGa = w => { const c = w.charCodeAt(w.length - 1) - 0xAC00; return w + (c >= 0 && c < 11172 && c % 28 ? '이' : '가'); };
+const payReal = (pay, N) => pay !== null && pay < N;   // 종료 시점 잔존가치로만 회수되는 경우는 회수로 보지 않음
+const payTxt = (pay, N) => pay === null ? '<span style="color:var(--mag)">미회수</span>' : pay >= N ? '<span style="color:#b86e00" title="분석 마지막 해의 건물·토지 잔존가치를 더해야 회수됩니다">종료 시 잔존가치로만</span>' : `운영 ${pay}년차`;
 const eunNeun = w => { const c = w.charCodeAt(w.length - 1) - 0xAC00; return w + (c >= 0 && c < 11172 && c % 28 ? '은' : '는'); };
 function lawIssues() {
   const t = S.meta.type, ex = S.eval.exit, duty = FE.DUTY[t] || 0, N = S.meta.period, nm = FE.TYPE_NAME[t], F = S.fin, L = [];
@@ -897,7 +900,7 @@ async function rgRun(fresh) {
 }
 function rgDraw() {
   if (!RG || !RG.out.length) { $('rgSum').innerHTML = '<p class="note" style="margin:0">"18개 시군 비교 실행"을 누르면 시군마다 실거래 시세를 받아 계산합니다. 처음에는 1~2분 걸리고, 같은 조건은 7일 동안 바로 다시 보여 줍니다.</p>'; $('rgTbl').innerHTML = ''; $('rgNote').textContent = ''; return; }
-  const ok = RG.out.filter(x => !x.thin), rec = ok.filter(x => x.pay !== null), pos = ok.filter(x => x.npv >= 0);
+  const ok = RG.out.filter(x => !x.thin), rec = ok.filter(x => payReal(x.pay, S.meta.period)), pos = ok.filter(x => x.npv >= 0);
   ok.sort((a, b) => b.npv - a.npv);
   const best = ok.find(x => x.cnt >= 10 * S.units.length) || ok[0], mx = Math.max(1, ...ok.map(x => Math.abs(x.npv)));
   $('rgSum').innerHTML = `<div class="rgsum"><div class="${rec.length ? 'pos' : 'neg'}"><small>투자금 회수 가능 (분석 기간 안)</small><br><b>${rec.length}곳</b></div><div class="${pos.length ? 'pos' : 'neg'}"><small>최종 손익 0 이상</small><br><b>${pos.length}곳</b></div>${best ? `<div><small>가장 나은 곳 (사례 충분한 시군 중)</small><br><b>${best.name}</b> <span class="note">${eok(best.npv)}</span></div>` : ''}</div>`
@@ -905,9 +908,9 @@ function rgDraw() {
   const head = `<thead><tr><th>시군</th><th class="n">사례</th>${S.units.map(u => `<th class="n">${u.t} 시세</th>`).join('')}<th class="n">세대당 월 임대료</th><th>최종 손익 (공사)</th><th class="n">연 수익률</th><th class="n">투자금 회수</th><th class="n">손익 0까지 필요한 추가 지원</th><th></th></tr></thead>`;
   const row = x => x.thin
     ? `<tr><td>${x.name}</td><td class="n">${x.cnt}</td><td colspan="${S.units.length + 6}" class="note">면적이 비슷한 거래가 3건 미만이라 판단을 보류합니다 (조회 기간을 24개월로 늘려 보세요)</td></tr>`
-    : `<tr class="${x.pay !== null ? 'ok' : ''} ${x.code === S.meta.lawd ? 'cur' : ''}"><td><b>${x.name}</b>${x.code === S.meta.lawd ? ' <small class="note">현재</small>' : ''}</td><td class="n">${n0(x.cnt)}${x.cnt < 10 * S.units.length ? ' <small style="color:#b86e00" title="사례가 적어 시세가 크게 흔들릴 수 있습니다">⚠ 적음</small>' : ''}</td>${x.mk.map(m => `<td class="n">${n0(m.conv)}만</td>`).join('')}<td class="n">${won(x.rent)}</td>`
+    : `<tr class="${payReal(x.pay, S.meta.period) ? 'ok' : ''} ${x.code === S.meta.lawd ? 'cur' : ''}"><td><b>${x.name}</b>${x.code === S.meta.lawd ? ' <small class="note">현재</small>' : ''}</td><td class="n">${n0(x.cnt)}${x.cnt < 10 * S.units.length ? ' <small style="color:#b86e00" title="사례가 적어 시세가 크게 흔들릴 수 있습니다">⚠ 적음</small>' : ''}</td>${x.mk.map(m => `<td class="n">${n0(m.conv)}만</td>`).join('')}<td class="n">${won(x.rent)}</td>`
       + `<td><div style="display:flex;align-items:center;gap:8px"><div class="nbar"><i class="z"></i><i style="${x.npv >= 0 ? `left:50%;width:${x.npv / mx * 50}%;background:var(--ok)` : `right:50%;width:${-x.npv / mx * 50}%;background:var(--mag)`}"></i></div><span class="${x.npv < 0 ? 'neg' : ''}" style="color:${x.npv < 0 ? 'var(--mag)' : 'var(--ok)'}">${eok(x.npv)}</span></div></td>`
-      + `<td class="n">${pct(x.irr)}</td><td class="n">${x.pay !== null ? `운영 ${x.pay}년차` : '<span style="color:var(--mag)">미회수</span>'}</td><td class="n">${x.need === 0 ? '—' : x.need === null ? '총사업비 이상' : eok(x.need)}</td><td><button class="btn" data-rg="${x.code}" style="min-height:34px">이 시군으로 적용</button></td></tr>`;
+      + `<td class="n">${pct(x.irr)}</td><td class="n">${payTxt(x.pay, S.meta.period)}</td><td class="n">${x.need === 0 ? '—' : x.need === null ? '총사업비 이상' : eok(x.need)}</td><td><button class="btn" data-rg="${x.code}" style="min-height:34px">이 시군으로 적용</button></td></tr>`;
   $('rgTbl').innerHTML = head + '<tbody>' + ok.map(row).join('') + RG.out.filter(x => x.thin).map(row).join('') + '</tbody>';
   rgRecDraw();
   $('rgNote').textContent = `시세: 국토교통부 전월세 실거래(최근 ${S.survey.months}개월, ${RG.types.replace('apt', '아파트').replace('rh', '연립다세대').replace('offi', '오피스텔').replace('sh', '단독다가구')}), 타입 면적 ±${S.survey.band}㎡, 시장전환율 ${S.rent.rate}%. 국민임대 지역계수·영구임대 급지는 시군에 맞춰 바꿨습니다. ${RG.at.toLocaleString('ko-KR')} 기준.`;
@@ -1146,7 +1149,7 @@ $('docApply').addEventListener('click', () => {
 
 // ---------- 지역별 추천 사업안: 시군 시세에 맞춰 유형·주력 평형을 바꿔 가며 최선안 탐색 ----------
 const REC_E = [26, 36, 46, 59];                 // 후보 주력 평형(주거전용㎡)
-const REC_T = ['tong', 'happy', 'kuk'];         // 후보 공급 유형
+const REC_T = ['tong', 'happy'];                // 후보 공급 유형: 시세 연동 신규 공급 유형 (국민·영구는 통합공공임대로 일원화)
 function mktFor(rows, e, r) {
   const band = S.survey.band, trim = S.survey.trim / 100;
   let a = rows.filter(x => x.area > 0 && Math.abs(x.area - e) <= band).map(x => x.deposit + (r > 0 ? x.monthly * 12 / r : 0)).sort((p, q) => p - q);
@@ -1181,21 +1184,21 @@ function recWhy(x) {
   parts.push(`${b.e}㎡ 전월세 거래 ${n0(b.mk.cnt)}건, 전세 환산 ${n0(b.mk.conv)}만원(㎡당 ${n0(b.mk.conv / b.e)}만원).`);
   if (x.deep && x.deep.e !== b.e) parts.push(`거래가 가장 많은 건 ${x.deep.e}㎡(${n0(x.deep.cnt)}건)지만 손익은 ${b.e}㎡가 더 낫습니다.`);
   else if (x.deep) parts.push(`이 시군에서 거래가 가장 많은 평형입니다.`);
-  parts.push(`후보 ${x.tried.length}개 중 ${nm}이 가장 유리합니다${isFinite(d) ? ` (현재 사업안보다 ${d >= 0 ? eok(d) + ' 개선' : eok(-d) + ' 불리'})` : ''}.`);
+  parts.push(`후보 ${x.tried.length}개 중 ${iGa(nm)} 가장 유리합니다${isFinite(d) ? ` (현재 사업안보다 ${d >= 0 ? eok(d) + ' 개선' : eok(-d) + ' 불리'})` : ''}.`);
   if (b.npv < 0) parts.push('그래도 손해라 무상 지원 확대나 융자 축소가 함께 필요합니다.');
   return parts.join(' ');
 }
 function rgRecDraw() {
   if (!RG || !RG.rec) { $('rgRecSum').innerHTML = ''; $('rgRec').innerHTML = ''; return; }
   const L = RG.rec.filter(x => !x.none).sort((a, b) => b.best.npv - a.best.npv), none = RG.rec.filter(x => x.none);
-  const rec = L.filter(x => x.best.pay !== null), top = L.find(x => x.best.mk.cnt >= 10) || L[0];
+  const rec = L.filter(x => payReal(x.best.pay, x.best.s.meta.period)), top = L.find(x => x.best.mk.cnt >= 10) || L[0];
   $('rgRecSum').innerHTML = `<div class="rgsum"><div class="${rec.length ? 'pos' : 'neg'}"><small>추천안으로 투자금 회수 가능</small><br><b>${rec.length}곳</b></div>${top ? `<div><small>가장 나은 추천안 (거래 10건 이상)</small><br><b>${top.name}</b> <span class="note">${FE.TYPE_NAME[top.best.t]} ${top.best.e}㎡ ${top.best.n}세대 · ${eok(top.best.npv)}</span></div>` : ''}</div>`
-    + `<p class="note" style="margin-top:0">시군마다 공급 유형 3가지(통합·행복·국민) × 주력 평형 4가지(26·36·46·59㎡)를 모두 계산해 공사 손익이 가장 좋은 안을 골랐습니다. 주택공급면적 합계는 지금 사업과 같게 두고, 국비·기금 지원은 실제 기준(평당 단가 × 평형)처럼 전용면적 합계에 비례하게 잡았습니다.</p>`;
+    + `<p class="note" style="margin-top:0">시군마다 공급 유형 2가지(통합공공임대·행복주택) × 주력 평형 4가지(26·36·46·59㎡)를 모두 계산해 공사 손익이 가장 좋은 안을 골랐습니다. 주택공급면적 합계는 지금 사업과 같게 두고, 국비·기금 지원은 실제 기준(평당 단가 × 평형)처럼 전용면적 합계에 비례하게 잡았습니다.</p>`;
   const head = '<thead><tr><th>시군</th><th>추천 사업안</th><th class="n">세대당 월 임대료</th><th>최종 손익 (공사)</th><th class="n">투자금 회수</th><th>판단 근거</th><th></th></tr></thead>';
   const mx = Math.max(1, ...L.map(x => Math.abs(x.best.npv)));
-  $('rgRec').innerHTML = head + '<tbody>' + L.map(x => { const b = x.best; return `<tr class="${b.pay !== null ? 'ok' : ''}"><td><b>${x.name}</b>${b.mk.cnt < 10 ? ' <small style="color:#b86e00">⚠ 거래 적음</small>' : ''}</td><td class="plan"><b>${FE.TYPE_NAME[b.t]}</b>${b.e}㎡ (공급 ${b.s.units[0].s}㎡) ${b.n}세대</td><td class="n">${won(b.rent)}</td>`
+  $('rgRec').innerHTML = head + '<tbody>' + L.map(x => { const b = x.best; return `<tr class="${payReal(b.pay, b.s.meta.period) ? 'ok' : ''}"><td><b>${x.name}</b>${b.mk.cnt < 10 ? ' <small style="color:#b86e00">⚠ 거래 적음</small>' : ''}</td><td class="plan"><b>${FE.TYPE_NAME[b.t]}</b>${b.e}㎡ (공급 ${b.s.units[0].s}㎡) ${b.n}세대</td><td class="n">${won(b.rent)}</td>`
     + `<td><div style="display:flex;align-items:center;gap:8px"><div class="nbar"><i class="z"></i><i style="${b.npv >= 0 ? `left:50%;width:${b.npv / mx * 50}%;background:var(--ok)` : `right:50%;width:${-b.npv / mx * 50}%;background:var(--mag)`}"></i></div><span style="color:${b.npv < 0 ? 'var(--mag)' : 'var(--ok)'}">${eok(b.npv)}</span></div></td>`
-    + `<td class="n">${b.pay !== null ? `운영 ${b.pay}년차` : '<span style="color:var(--mag)">미회수</span>'}</td><td class="why">${recWhy(x)}</td><td><button class="btn pri" data-recapply="${x.base.code}" style="min-height:34px;white-space:nowrap">사업개요부터 적용</button></td></tr>`; }).join('')
+    + `<td class="n">${payTxt(b.pay, b.s.meta.period)}</td><td class="why">${recWhy(x)}</td><td><button class="btn pri" data-recapply="${x.base.code}" style="min-height:34px;white-space:nowrap">사업개요부터 적용</button></td></tr>`; }).join('')
     + none.map(x => `<tr><td>${x.name}</td><td colspan="6" class="note">후보 평형 모두 거래가 5건 미만이라 추천하지 않습니다 (조회 기간을 24개월로 늘려 보세요)</td></tr>`).join('') + '</tbody>';
 }
 document.addEventListener('click', e => {
