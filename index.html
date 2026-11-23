@@ -74,6 +74,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
 th{font-weight:500;color:var(--mute);font-size:13px}
 td:first-child{white-space:nowrap}
+#cfTbl th,#cfTbl td{white-space:nowrap}
 td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 td.neg{color:var(--mag)}
 .scroll{overflow-x:auto}
@@ -114,6 +115,8 @@ svg text{font:12px "IBM Plex Sans KR",sans-serif;fill:var(--mute);paint-order:st
 .verdict:hover{text-decoration:underline;text-underline-offset:4px}.verdict.mid{color:#b86e00}.verdict.neg{color:var(--mag)}
 .verdict::before{content:"";width:9px;height:9px;border-radius:2px;background:currentColor}
 .res{top:72px}
+/* 아래에 전체 너비 패널(민감도·운영수지표)이 있는 탭에서는 결과 패널이 그 위를 덮지 않게 고정 해제 */
+.view:has(> .panel[style*="grid-column:1/-1"]) > .res{position:static}
 .stepnav{grid-column:1/-1;display:flex;justify-content:space-between;gap:10px;margin-top:4px}
 .stepnav .btn{min-height:48px;padding:0 20px}.stepnav .nx{margin-left:auto}
 .btn{transition:transform .12s,box-shadow .2s,background .2s,border-color .2s}
