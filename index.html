@@ -163,6 +163,15 @@ input,select,.btn{border-radius:6px}
 @media(max-width:600px){.top{padding-top:16px}.bar input{flex:1 0 100%}.bar .btn{min-height:38px;padding:0 12px;font-size:14px}.tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;mask-image:linear-gradient(90deg,#000 85%,transparent)}.tabs::-webkit-scrollbar{display:none}.tabs button{flex:0 0 auto}.res{top:auto}}
 .brow.sens{grid-template-columns:11em minmax(0,1fr) 13em}
 @media(max-width:700px){.brow.sens{grid-template-columns:minmax(0,1fr);gap:4px;margin:12px 0}.brow.sens .v{text-align:left}}
+
+.law-dlg{max-height:calc(100dvh - 32px);overflow-y:auto;max-width:560px!important;border-top:4px solid var(--mag)}
+.law-dlg h2{color:var(--mag)}
+.law-dlg .li{border-left:3px solid var(--mag);padding:6px 0 6px 12px;margin:10px 0}
+.law-dlg .li.money{border-left-color:#c47a00}
+.law-dlg .li b{display:block;margin-bottom:2px}
+.law-dlg .li small{display:block;color:var(--mute);margin-top:3px}
+.lawflag{flex:0 0 auto;border:1px solid var(--mag);color:var(--mag);background:none;border-radius:6px;padding:5px 10px;font:600 13px "IBM Plex Sans KR",sans-serif;cursor:pointer;white-space:nowrap}
+.lawflag:hover{background:color-mix(in srgb,var(--mag) 8%,transparent)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -255,6 +264,7 @@ input,select,.btn{border-radius:6px}
 <p class="foot">강원개발공사 내부 업무용 참고 도구입니다. 투자심사·타당성 검토용 수치는 확정 설계·감정평가·그해 기금운용계획과 국토교통부 사업 지침 기준으로 다시 확인하세요. 실거래가: 국토교통부 실거래가 공개 API(공공데이터포털).</p>
 
 <div class="dialog" id="setDlg" role="dialog" aria-modal="true" aria-labelledby="setTitle"><div class="panel" style="max-width:640px"><h2 id="setTitle">설정 — 금액 단위</h2><p class="note" style="margin-top:0">보이는 단위만 바뀌고 저장된 값은 그대로입니다. 입력칸도 고른 단위로 바뀌어, 예를 들어 "억원"을 고르면 435.2처럼 억 단위로 넣으면 됩니다. 이 브라우저에 기억됩니다.</p><div id="setBody" style="margin-top:12px"></div><div class="row"><button class="btn pri" id="setOk">적용</button><button class="btn" id="setReset">기본값 (억원·백만원·원)</button><button class="btn" id="setCancel">닫기</button></div></div></div>
+<div class="dialog" id="lawDlg" role="alertdialog" aria-modal="true" aria-labelledby="lawTitle" aria-describedby="lawBody"><div class="panel law-dlg"><h2 id="lawTitle">법령상 할 수 없는 계획입니다</h2><div id="lawBody"></div><div class="row" style="justify-content:flex-end"><button class="btn" id="lawKeep">검토용으로 계속 계산</button><button class="btn pri" id="lawHold">계속 보유로 되돌리기</button></div></div></div>
 <div class="dialog" id="passDlg"><div class="panel"><h2>접근코드</h2><p class="note">관리자가 Vercel 환경변수 APP_PASSCODE로 정한 코드를 넣으면 실거래가 조회와 사업 저장을 쓸 수 있습니다. 이 브라우저에만 저장됩니다.</p><div class="f" style="margin-top:10px"><input id="passIn" type="password" aria-label="접근코드" autocomplete="off"></div><div class="row"><button class="btn pri" id="passOk">확인</button><button class="btn" id="passCancel">닫기</button></div></div></div>
 
 <div id="toast" role="status" aria-live="polite"></div>

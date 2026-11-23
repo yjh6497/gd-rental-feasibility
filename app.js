@@ -339,6 +339,7 @@ function onEdit(e) {
     else if (t.dataset.money) v = t.dataset.p === 'corp.pubL' ? '' : 0;
     setP(t.dataset.p, v);
     if (t.dataset.p === 'meta.lawd' && e.type === 'change') { S.meta.umd = ''; buildFields(); fillFields(); loadUmd(S.meta.lawd); }
+    if (e.type === 'change' && /^(eval\.exit|meta\.type|meta\.period|fin\.)/.test(t.dataset.p)) setTimeout(() => showLaw(false), 0);
     if (t.dataset.p === 'meta.type' && e.type === 'change') { const d = FE.DUTY[v]; if (d) { S.meta.period = d >= 50 ? 50 : 30; } if (v === 'buy') S.meta.period = 10; fillFields(); }
   } else if (t.dataset.u !== undefined) {
     S.units[+t.dataset.u][t.dataset.c] = t.type === 'number' ? (parseFloat(t.value) || 0) : t.value;
@@ -783,6 +784,38 @@ function boot() {
   const h = (location.hash || '').slice(1); const b = document.querySelector(`.tabs button[data-v="${h}"]`); if (b) b.click();
 }
 
+// ---------- 법령 제한 경고창: 매각·분양전환 ----------
+const eunNeun = w => { const c = w.charCodeAt(w.length - 1) - 0xAC00; return w + (c >= 0 && c < 11172 && c % 28 ? '은' : '는'); };
+function lawIssues() {
+  const t = S.meta.type, ex = S.eval.exit, duty = FE.DUTY[t] || 0, N = S.meta.period, nm = FE.TYPE_NAME[t], F = S.fin, L = [];
+  const conv = ex === 'conv10' || ex === 'conv5', sale = conv || ex === 'sell';
+  if (conv && ['tong', 'happy', 'kuk', 'young', 'jeonse'].includes(t))
+    L.push({ k: 'law', t: `${eunNeun(nm)} 분양전환할 수 없습니다`, b: `분양전환은 처음부터 "분양전환공공임대주택"으로 계획한 경우에만 할 수 있습니다. ${eunNeun(nm)} 임대의무기간 ${duty}년 동안 팔 수 없습니다.`, l: '공공주택 특별법 제50조의2①, 시행령 제2조①제5호·제54조①' });
+  else if (ex === 'sell' && duty && N < duty)
+    L.push({ k: 'law', t: `임대의무기간 ${duty}년 안에는 팔 수 없습니다`, b: `분석 기간 ${N}년이 끝나는 시점은 아직 임대의무기간입니다. 예외는 LH·도·시 같은 다른 공공주택사업자에게 의무와 함께 넘기는 경우뿐입니다.`, l: '공공주택 특별법 제50조의2①·②제1호, 시행령 제54조①' });
+  else if (conv && duty && N < duty)
+    L.push({ k: 'law', t: `임대의무기간 ${duty}년 전에는 분양전환할 수 없습니다`, b: '임대의무기간의 절반이 지난 분양전환공공임대주택에서 임차인과 합의한 경우 등만 예외입니다.', l: '공공주택 특별법 제50조의2②제2호, 시행령 제54조②' });
+  if (sale && L.length) {
+    if (F.gov > 0) L.push({ k: 'money', t: '국비 보조금 반환 위험', b: '국비 보조로 지은 재산을 팔려면 국토교통부 승인을 받아야 합니다. 승인 없이 팔면 보조금 반환 명령 대상입니다.', l: '보조금 관리에 관한 법률 제35조' });
+    if (F.loc > 0) L.push({ k: 'money', t: '지방비 보조금 반환 위험', b: '도·시 보조금으로 지은 재산도 지자체장 승인 없이 팔면 반환 명령 대상입니다. 출자라면 협약 조건을 따릅니다.', l: '지방자치단체 보조금 관리에 관한 법률 제21조' });
+    if (F.inv > 0 || F.loan > 0) L.push({ k: 'money', t: '주택도시기금 출자·융자 조건 확인', b: '기금 지원은 임대 운영을 전제로 합니다. 분양·매각 시 융자 상환이나 출자금 회수 조건, 공모 지원 자격 유지 여부를 HUG·국토부에 먼저 확인해야 합니다.', l: '주택도시기금법 제9조, 그해 기금 업무편람·공모 지침' });
+  }
+  return L;
+}
+let lawSeen = '';
+function showLaw(force) {
+  const L = lawIssues(), sig = L.map(x => x.t).join('|');
+  if (!L.length) { lawSeen = ''; $('lawDlg').classList.remove('on'); return; }
+  if (!force && sig === lawSeen) return;
+  lawSeen = sig;
+  $('lawBody').innerHTML = L.map(x => `<div class="li ${x.k === 'money' ? 'money' : ''}"><b>${x.t}</b>${x.b}<small>근거: ${x.l}</small></div>`).join('');
+  $('lawDlg').classList.add('on'); $('lawHold').focus();
+}
+$('lawHold').addEventListener('click', () => { S.eval.exit = 'hold'; lawSeen = ''; $('lawDlg').classList.remove('on'); fillFields(); update(); });
+$('lawKeep').addEventListener('click', () => $('lawDlg').classList.remove('on'));
+$('lawDlg').addEventListener('keydown', e => { if (e.key === 'Escape') $('lawDlg').classList.remove('on'); });
+document.addEventListener('click', e => { if (e.target.closest('#lawFlag')) showLaw(true); });
+
 // ---------- 쉬운 사용: 요약 띠·판정, 단계 이동, 숫자 움직임 ----------
 const REDUCE = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 const STEPS = ['ov', 'sv', 'rn', 'tc', 'fd', 'ev'];
@@ -791,7 +824,8 @@ function goTab(v) { const b = document.querySelector(`.tabs button[data-v="${v}"
 function renderStrip() {
   const { C, Fd, Ev } = R, d = S.eval.disc / 100;
   let v, cls, why;
-  if (Fd.own < 0) { v = '재원 초과'; cls = 'mid'; why = '재원 합계가 총사업비보다 많습니다. 재원 조달 탭을 확인하세요.'; }
+  if (lawIssues().some(x => x.k === 'law')) { v = '법령상 불가'; cls = 'neg'; why = '분석 종료 시 처리(매각·분양전환)가 임대의무기간 규정에 맞지 않습니다. 계속 보유로 바꾸거나 경고 내용을 확인하세요.'; }
+  else if (Fd.own < 0) { v = '재원 초과'; cls = 'mid'; why = '재원 합계가 총사업비보다 많습니다. 재원 조달 탭을 확인하세요.'; }
   else if (Ev.npvEq >= 0 && Ev.irrEq !== null && Ev.irrEq >= d) { v = '사업성 양호'; cls = ''; why = '공사 관점 NPV가 0 이상이고 IRR이 할인율을 넘습니다.'; }
   else if (Ev.npvProj >= 0) { v = '재원 보완 필요'; cls = 'mid'; why = '사업 전체로는 수익이 나지만 공사 부담분은 손실입니다. 재정·기금 지원을 늘리거나 조건을 조정해 보세요.'; }
   else { v = '사업성 부족'; cls = 'neg'; why = '사업 전체 NPV도 0 미만입니다. 임대료·사업비·지원 조건을 다시 보세요.'; }
@@ -799,7 +833,8 @@ function renderStrip() {
   $('strip').innerHTML = `<button type="button" class="verdict ${cls}" id="verdict" title="${why}" aria-label="판정: ${v}. ${why} 수익성 탭으로 이동">${v}</button>`
     + it('총사업비', eok(C.TC)) + it('공사 자체자금', eok(Fd.own), Fd.own < 0 ? 'neg' : '')
     + it('공사 NPV', eok(Ev.npvEq), Ev.npvEq >= 0 ? 'pos' : 'neg') + it('공사 IRR', pct(Ev.irrEq), Ev.irrEq !== null && Ev.irrEq >= d ? 'pos' : 'neg')
-    + it('투자금 회수', Ev.payback ? `운영 ${Ev.payback - Ev.Cy}년차` : '미회수', Ev.payback ? '' : 'neg');
+    + it('투자금 회수', Ev.payback ? `운영 ${Ev.payback - Ev.Cy}년차` : '미회수', Ev.payback ? '' : 'neg')
+    + (lawIssues().length ? '<button type="button" class="lawflag" id="lawFlag">⚠ 법령상 불가 계획</button>' : '');
 }
 document.addEventListener('click', e => { if (e.target.closest('#verdict')) goTab('ev'); });
 const prevNum = {};
