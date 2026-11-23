@@ -8,14 +8,14 @@ const EP = {
   offi: ['RTMSDataSvcOffiRent', 'getRTMSDataSvcOffiRent', '오피스텔'],
   sh:   ['RTMSDataSvcSHRent',   'getRTMSDataSvcSHRent',   '단독다가구']
 };
-const tag = (xml, names) => {
+export const tag = (xml, names) => {
   for (const n of names) {
     const m = xml.match(new RegExp('<' + n + '>([\\s\\S]*?)</' + n + '>'));
     if (m && m[1].trim() !== '') return m[1].trim();
   }
   return '';
 };
-const num = s => { const v = parseFloat(String(s).replace(/,/g, '')); return isFinite(v) ? v : 0; };
+export const num = s => { const v = parseFloat(String(s).replace(/,/g, '')); return isFinite(v) ? v : 0; };
 
 export function ymList(months, now = new Date()) {
   const out = [];

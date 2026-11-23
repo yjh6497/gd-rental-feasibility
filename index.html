@@ -278,7 +278,7 @@ input,select,.btn{border-radius:6px}
 <section class="view" id="v-tc">
 <div>
 <div class="panel"><details class="guide" open><summary>이 탭에서 할 일</summary><ol><li>실제 공사비(직접공사비)와 설계·감리·부대비·예비비 비율, 택지비, 건설 중 금융비용을 넣습니다.</li><li>표준건축비 상한은 세대 타입과 층수로 자동 계산됩니다. 실제 건축비가 상한을 넘으면 임대료·분양전환 산정에는 상한까지만 인정됩니다.</li></ol></details>
-<h2>공사비와 부대비</h2><div class="grid" id="f-cost"></div></div>
+<h2>공사비와 부대비</h2><div class="grid" id="f-cost"></div><div class="row"><button class="btn" id="landEst">실거래로 토지비 추정</button></div><div id="landBox"></div></div>
 <div class="panel"><h2>표준건축비 가산 (별표 7)</h2><div class="grid" id="f-std"></div></div>
 </div>
 <div class="panel res"><h2>총사업비</h2><div class="big" id="tcBig"></div><div class="bars" id="tcBars"></div><div class="scroll"><table id="tcTbl"></table></div></div>
@@ -309,7 +309,7 @@ input,select,.btn{border-radius:6px}
 
 <section class="view wide" id="v-rg">
 <div class="panel"><h2>강원 18개 시군 비교</h2>
-<p class="note" style="margin-top:0">시군마다 실거래 시세를 받아 두 가지로 봅니다. <b>현재 사업 그대로</b>는 입력한 사업을 시군만 바꿔 계산하고, <b>지역별 추천 사업안</b>은 그 시군 시세에 맞춰 공급 유형과 주력 평형을 바꿔 가며 가장 나은 안을 찾습니다. 토지비·공사비 총액과 세대당 지원 단가는 지금 입력값을 씁니다.</p>
+<p class="note" style="margin-top:0">시군마다 실거래 시세를 받아 두 가지로 봅니다. <b>현재 사업 그대로</b>는 입력한 사업을 시군만 바꿔 계산하고, <b>지역별 추천 사업안</b>은 그 시군 시세에 맞춰 공급 유형과 주력 평형을 바꿔 가며 가장 나은 안을 찾습니다. 공사비 총액과 지원 단가는 지금 입력값을 쓰고, 토지비는 대지면적(총사업비 탭)을 넣으면 시군별 토지 실거래 단가로 계산합니다.</p>
 <div class="row"><button class="btn pri" id="rgRun">18개 시군 비교 실행</button><button class="btn" id="rgFresh">새로 조회</button><button class="btn" id="rgStop" hidden>중지</button><span class="note" id="rgMsg" style="margin:0"></span></div>
 <div class="prog" style="background:var(--soft);margin-top:10px;height:4px;border-radius:2px" aria-hidden="true"><i id="rgBar" style="width:0"></i></div></div>
 <div class="panel"><nav class="subtabs rgtabs" role="tablist" aria-label="지역 비교 보기" style="margin-bottom:14px"><button role="tab" data-rgv="same" aria-selected="true">현재 사업 그대로</button><button role="tab" data-rgv="rec" aria-selected="false">지역별 추천 사업안</button></nav>

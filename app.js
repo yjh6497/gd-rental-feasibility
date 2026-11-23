@@ -29,7 +29,7 @@ const DEF = {
   ],
   survey: { sameUmd: false, months: 12, apt: true, rh: true, offi: true, sh: false, band: 5, trim: 10 },
   rent: { rate: 6.0, depRate: 3.0, tong: [10, 15, 25, 25, 15, 10], happy: [30, 20, 30, 10, 10, 0], kukRegion: 1.0, kukSpecial: 'none', youngShare: 50, youngGrade: '101268,2015', buyPct: 50 },
-  cost: { direct: 35000, designP: 3, superP: 3, otherP: 5, contP: 3, land: 3000, finCost: 500, struct: 0, sash: 0, island: 0, stdAdd: 0 },
+  cost: { direct: 35000, designP: 3, superP: 3, otherP: 5, contP: 3, land: 3000, siteArea: 0, finCost: 500, struct: 0, sash: 0, island: 0, stdAdd: 0 },
   fin: { gov: 13000, loc: 3000, inv: 0, loan: 9000, ink: 3000, bond: 5000, loanRate: 2.0, loanGrace: 10, loanTerm: 30, bondRate: 3.8 },
   op: { vac: 3, mgmt: 15000, repairP: 0.4, insP: 0.05, tax: 0, bad: 1, rentStep: 3, rentEvery: 2, costG: 2.0, depYield: 2.5, other: 0 },
   eval: { disc: 4.5, exit: 'hold', appG: 1.5, life: 40, convRate: 3.0 },
@@ -91,7 +91,7 @@ const FIELDS = {
   ],
   'f-cost': [
     ['cost.direct', '직접공사비 (실제)', '백만원'], ['cost.designP', '설계비', '%'], ['cost.superP', '감리비', '%'], ['cost.otherP', '부대비 (인입·부담금 등)', '%'],
-    ['cost.contP', '예비비', '%'], ['cost.land', '택지비', '백만원'], ['cost.finCost', '건설 중 금융비용', '백만원']
+    ['cost.contP', '예비비', '%'], ['cost.land', '택지비', '백만원'], ['cost.siteArea', '대지면적', '㎡'], ['cost.finCost', '건설 중 금융비용', '백만원']
   ],
   'f-std': [
     ['cost.struct', '구조형식 가산', sel([['0', '벽식 등 (없음)'], ['5', '라멘·무량판 (+5%)'], ['10', '철골철근콘크리트 (+10%)'], ['16', '철골조 (+16%)']])],
@@ -156,6 +156,7 @@ const HOW = {
   'cost.superP': '감리비 ÷ 직접공사비(%). 건설사업관리·전기·통신·소방 감리 대가 합계 비율.',
   'cost.otherP': '전기·가스·상수도 인입비, 각종 부담금, 인허가비 등 ÷ 직접공사비(%).',
   'cost.contP': '공사비 증액에 대비한 예비비 비율(%).',
+  'cost.siteArea': '사업 부지의 대지면적(㎡). 넣어 두면 아래 "실거래로 토지비 추정"과 강원 지역 비교에서 시군별 토지 실거래 단가 × 대지면적으로 토지비를 계산합니다.',
   'cost.land': '택지 공급가격 또는 감정가(금액). 지자체가 현물출자하는 토지라면 재원 탭 현물출자에도 같은 금액을 넣습니다.',
   'cost.finCost': '공사 기간 중 기금 융자·사채 이자 등(금액).',
   'cost.struct': '구조계산서의 구조형식.', 'cost.sash': '발코니 새시를 일괄 시공하면 그 비용 비율(최대 5%).',
@@ -798,6 +799,7 @@ function boot() {
   if (S.meta.umd === undefined) S.meta.umd = '';
   if (S.survey.sameUmd === undefined) S.survey.sameUmd = false;
   if (S.survey.sh === undefined) S.survey.sh = false;
+  if (S.cost.siteArea === undefined) S.cost.siteArea = 0;
   buildFields(); fillFields(); unitTable(); SV = null; drawSurvey();
   $('svList').innerHTML = '';
   update(); health().then(() => { loadList(); loadUmd(S.meta.lawd); });
@@ -845,6 +847,35 @@ $('lawKeep').addEventListener('click', () => $('lawDlg').classList.remove('on'))
 $('lawDlg').addEventListener('keydown', e => { if (e.key === 'Escape') $('lawDlg').classList.remove('on'); });
 document.addEventListener('click', e => { if (e.target.closest('#lawFlag,[data-lawopen]')) showLaw(true); });
 
+// ---------- 토지 실거래 단가 (국토교통부 토지 매매 실거래가) ----------
+const landKey = code => ['land', code, 12].join('|');
+async function landGet(code, fresh) {
+  const c = store.get(landKey(code), null);
+  if (!fresh && c && Date.now() - c.at < RG_TTL) return c.d;
+  const d = await api(`/api/land?lawd=${code}&months=12`);
+  if (!d.errors || !d.errors.length) { try { store.set(landKey(code), { at: Date.now(), d }); } catch (e) {} }
+  return d;
+}
+const landUnit = d => d && d.resDae && d.resDae.cnt >= 5 ? { v: d.resDae.med, how: '주거지역·대지', cnt: d.resDae.cnt } : d && d.res && d.res.cnt >= 5 ? { v: d.res.med, how: '주거지역 전체', cnt: d.res.cnt } : null;
+async function landEstimate() {
+  const box = $('landBox'), name = (GW.find(g => g[0] === S.meta.lawd) || [])[1];
+  box.innerHTML = `<p class="note"><span class="spin"></span>${name} 토지 매매 실거래(최근 12개월) 조회 중…</p>`;
+  try {
+    const d = await landGet(S.meta.lawd), u = landUnit(d);
+    if (!u) { box.innerHTML = `<p class="warn">${name}의 주거지역 토지 거래가 5건 미만이라 단가를 내지 못했습니다. 감정가나 공급가격을 직접 넣어 주세요.</p>`; return; }
+    const area = S.cost.siteArea, land = area * u.v;
+    box.innerHTML = `<div class="warn info" style="margin-top:10px"><b>${name} 토지 실거래 단가 (${u.how}, ${n0(u.cnt)}건 중앙값)</b><br>㎡당 <b>${n0(u.v / 1e4)}만원</b> <small>(가운데 50%: ${n0((d.resDae && u.how === '주거지역·대지' ? d.resDae : d.res).p25 / 1e4)}만 ~ ${n0((d.resDae && u.how === '주거지역·대지' ? d.resDae : d.res).p75 / 1e4)}만원)</small>`
+      + (area > 0 ? `<br>대지면적 ${n0(area)}㎡ × ㎡당 ${n0(u.v / 1e4)}만원 = <b>${eokTxt(land)}</b> <button class="btn" id="landApply" data-v="${Math.round(land / M)}" style="min-height:32px;margin-left:6px">택지비에 적용</button>` : '<br>대지면적을 넣으면 토지비를 바로 계산합니다.')
+      + `<br><small>실거래 단가는 시세 참고값입니다. 공공택지 공급가격·감정가가 있으면 그 값을 쓰세요. 개발 전 토지는 조성비가 따로 듭니다.</small></div>`;
+  } catch (e) {
+    box.innerHTML = `<p class="warn">${!hasServer || !e.status ? '토지 실거래 조회는 정식 사이트(배포 후)에서만 됩니다.' : e.message}</p>`;
+  }
+}
+document.addEventListener('click', e => {
+  if (e.target.id === 'landEst') landEstimate();
+  if (e.target.id === 'landApply') { S.cost.land = +e.target.dataset.v; fillFields(); update(); toast('토지 실거래 단가로 택지비를 넣었습니다.'); }
+});
+
 // ---------- 강원 지역 비교: 같은 사업을 18개 시군에 놓아 보기 ----------
 const RG_TTL = 7 * 864e5;
 let RG = null, rgStop = false;
@@ -861,8 +892,9 @@ function rgMarket(rows, r) {
     return { cnt: a.length, conv: a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0 };
   });
 }
-function rgCalc(code, rows) {
-  const s = clone(S); s.meta.lawd = code; s.meta.umd = ''; rgCoef(s, code);
+const landSet = (s, land) => { if (land && S.cost.siteArea > 0) s.cost.land = Math.round(S.cost.siteArea * land.v / M); };
+function rgCalc(code, rows, land) {
+  const s = clone(S); s.meta.lawd = code; s.meta.umd = ''; rgCoef(s, code); landSet(s, land);
   const mk = rgMarket(rows, s.rent.rate / 100), cnt = mk.reduce((a, m) => a + m.cnt, 0);
   if (mk.some(m => m.cnt < 3)) return { code, cnt, mk, thin: true };
   s.units.forEach((u, i) => { u.mkt = Math.round(mk[i].conv); });
@@ -878,7 +910,7 @@ function rgCalc(code, rows) {
 async function rgRun(fresh) {
   const types = ['apt', 'rh', 'offi', 'sh'].filter(t => S.survey[t]).join(',') || 'apt';
   const areas = [...new Set([...S.units.map(u => u.e), ...REC_E])].sort((a, b) => a - b).join(',');
-  const rowsBy = {};
+  const rowsBy = {}, landBy = {}; let landErr = '';
   rgStop = false; $('rgStop').hidden = false; $('rgRun').disabled = $('rgFresh').disabled = true;
   const out = [], fails = [];
   for (let i = 0; i < GW.length; i++) {
@@ -891,10 +923,12 @@ async function rgRun(fresh) {
       try { const j = await api(`/api/rent?lawd=${code}&months=${S.survey.months}&types=${types}&areas=${areas}&band=${S.survey.band}`); rows = j.rows; if (!j.errors.length) { try { store.set(key, { at: Date.now(), rows }); } catch (e) {} } }
       catch (e) { fails.push(name); if (!hasServer || !e.status) { $('rgMsg').textContent = '실거래 시세 조회는 정식 사이트(배포 후)에서만 됩니다.'; break; } continue; }
     }
-    rowsBy[code] = rows; out.push({ name, ...rgCalc(code, rows) });
+    let land = null;
+    if (S.cost.siteArea > 0) { try { land = landUnit(await landGet(code, fresh)); } catch (e) { landErr = e.message; } }
+    rowsBy[code] = rows; landBy[code] = land; out.push({ name, land, ...rgCalc(code, rows, land) });
   }
   $('rgBar').style.width = '100%'; $('rgStop').hidden = true; $('rgRun').disabled = $('rgFresh').disabled = false;
-  RG = { out, fails, types, at: new Date(), rec: out.map(o => ({ name: o.name, base: o, ...recCalc(o.code, rowsBy[o.code]) })) };
+  RG = { out, fails, types, at: new Date(), landErr, rec: out.map(o => ({ name: o.name, base: o, ...recCalc(o.code, rowsBy[o.code], landBy[o.code]) })) };
   if (out.length) $('rgMsg').textContent = `${out.length}개 시군 계산 완료` + (fails.length ? ` · 조회 실패: ${fails.join(', ')}` : '') + (rgStop ? ' · 중지됨' : '');
   rgDraw();
 }
@@ -905,15 +939,15 @@ function rgDraw() {
   const best = ok.find(x => x.cnt >= 10 * S.units.length) || ok[0], mx = Math.max(1, ...ok.map(x => Math.abs(x.npv)));
   $('rgSum').innerHTML = `<div class="rgsum"><div class="${rec.length ? 'pos' : 'neg'}"><small>투자금 회수 가능 (분석 기간 안)</small><br><b>${rec.length}곳</b></div><div class="${pos.length ? 'pos' : 'neg'}"><small>최종 손익 0 이상</small><br><b>${pos.length}곳</b></div>${best ? `<div><small>가장 나은 곳 (사례 충분한 시군 중)</small><br><b>${best.name}</b> <span class="note">${eok(best.npv)}</span></div>` : ''}</div>`
     + (rec.length ? '' : `<p class="warn" style="margin-top:0">지금 계획 조건으로는 강원 18개 시군 어디에서도 분석 기간 안에 투자금을 회수하지 못합니다. 오른쪽 "손익 0까지 필요한 추가 지원"이 가장 작은 곳이 협의 여지가 큰 곳입니다.</p>`);
-  const head = `<thead><tr><th>시군</th><th class="n">사례</th>${S.units.map(u => `<th class="n">${u.t} 시세</th>`).join('')}<th class="n">세대당 월 임대료</th><th>최종 손익 (공사)</th><th class="n">연 수익률</th><th class="n">투자금 회수</th><th class="n">손익 0까지 필요한 추가 지원</th><th></th></tr></thead>`;
+  const head = `<thead><tr><th>시군</th><th class="n">사례</th>${S.units.map(u => `<th class="n">${u.t} 시세</th>`).join('')}${S.cost.siteArea > 0 ? '<th class="n">토지 ㎡당</th>' : ''}<th class="n">세대당 월 임대료</th><th>최종 손익 (공사)</th><th class="n">연 수익률</th><th class="n">투자금 회수</th><th class="n">손익 0까지 필요한 추가 지원</th><th></th></tr></thead>`;
   const row = x => x.thin
-    ? `<tr><td>${x.name}</td><td class="n">${x.cnt}</td><td colspan="${S.units.length + 6}" class="note">면적이 비슷한 거래가 3건 미만이라 판단을 보류합니다 (조회 기간을 24개월로 늘려 보세요)</td></tr>`
-    : `<tr class="${payReal(x.pay, S.meta.period) ? 'ok' : ''} ${x.code === S.meta.lawd ? 'cur' : ''}"><td><b>${x.name}</b>${x.code === S.meta.lawd ? ' <small class="note">현재</small>' : ''}</td><td class="n">${n0(x.cnt)}${x.cnt < 10 * S.units.length ? ' <small style="color:#b86e00" title="사례가 적어 시세가 크게 흔들릴 수 있습니다">⚠ 적음</small>' : ''}</td>${x.mk.map(m => `<td class="n">${n0(m.conv)}만</td>`).join('')}<td class="n">${won(x.rent)}</td>`
+    ? `<tr><td>${x.name}</td><td class="n">${x.cnt}</td><td colspan="${S.units.length + 6 + (S.cost.siteArea > 0 ? 1 : 0)}" class="note">면적이 비슷한 거래가 3건 미만이라 판단을 보류합니다 (조회 기간을 24개월로 늘려 보세요)</td></tr>`
+    : `<tr class="${payReal(x.pay, S.meta.period) ? 'ok' : ''} ${x.code === S.meta.lawd ? 'cur' : ''}"><td><b>${x.name}</b>${x.code === S.meta.lawd ? ' <small class="note">현재</small>' : ''}</td><td class="n">${n0(x.cnt)}${x.cnt < 10 * S.units.length ? ' <small style="color:#b86e00" title="사례가 적어 시세가 크게 흔들릴 수 있습니다">⚠ 적음</small>' : ''}</td>${x.mk.map(m => `<td class="n">${n0(m.conv)}만</td>`).join('')}${S.cost.siteArea > 0 ? `<td class="n">${x.land ? n0(x.land.v / 1e4) + '만' : '<span class="note">입력값</span>'}</td>` : ''}<td class="n">${won(x.rent)}</td>`
       + `<td><div style="display:flex;align-items:center;gap:8px"><div class="nbar"><i class="z"></i><i style="${x.npv >= 0 ? `left:50%;width:${x.npv / mx * 50}%;background:var(--ok)` : `right:50%;width:${-x.npv / mx * 50}%;background:var(--mag)`}"></i></div><span class="${x.npv < 0 ? 'neg' : ''}" style="color:${x.npv < 0 ? 'var(--mag)' : 'var(--ok)'}">${eok(x.npv)}</span></div></td>`
       + `<td class="n">${pct(x.irr)}</td><td class="n">${payTxt(x.pay, S.meta.period)}</td><td class="n">${x.need === 0 ? '—' : x.need === null ? '총사업비 이상' : eok(x.need)}</td><td><button class="btn" data-rg="${x.code}" style="min-height:34px">이 시군으로 적용</button></td></tr>`;
   $('rgTbl').innerHTML = head + '<tbody>' + ok.map(row).join('') + RG.out.filter(x => x.thin).map(row).join('') + '</tbody>';
   rgRecDraw();
-  $('rgNote').textContent = `시세: 국토교통부 전월세 실거래(최근 ${S.survey.months}개월, ${RG.types.replace('apt', '아파트').replace('rh', '연립다세대').replace('offi', '오피스텔').replace('sh', '단독다가구')}), 타입 면적 ±${S.survey.band}㎡, 시장전환율 ${S.rent.rate}%. 국민임대 지역계수·영구임대 급지는 시군에 맞춰 바꿨습니다. ${RG.at.toLocaleString('ko-KR')} 기준.`;
+  $('rgNote').textContent = `시세: 국토교통부 전월세 실거래(최근 ${S.survey.months}개월, ${RG.types.replace('apt', '아파트').replace('rh', '연립다세대').replace('offi', '오피스텔').replace('sh', '단독다가구')}), 타입 면적 ±${S.survey.band}㎡, 시장전환율 ${S.rent.rate}%. 국민임대 지역계수·영구임대 급지는 시군에 맞춰 바꿨습니다. ${S.cost.siteArea > 0 ? (RG.landErr ? `토지비: 실거래 조회 실패(${RG.landErr}) — 입력한 택지비 그대로.` : `토지비: 시군별 토지 매매 실거래 ㎡당 중앙값(주거지역) × 대지면적 ${n0(S.cost.siteArea)}㎡.`) : '토지비: 모든 시군 같은 값(대지면적을 넣으면 시군별 실거래 단가로 계산).'} ${RG.at.toLocaleString('ko-KR')} 기준.`;
 }
 $('rgRun').addEventListener('click', () => rgRun(false));
 $('rgFresh').addEventListener('click', () => rgRun(true));
@@ -1156,7 +1190,7 @@ function mktFor(rows, e, r) {
   const n0_ = a.length, cut = Math.floor(a.length * trim); if (a.length - 2 * cut >= 3) a = a.slice(cut, a.length - cut);
   return { cnt: n0_, conv: a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0 };
 }
-function recCalc(code, rows) {
+function recCalc(code, rows, land) {
   if (!rows) return { none: true };
   const U0 = S.units, hh0 = U0.reduce((a, u) => a + u.n, 0) || 1, eA = U0.reduce((a, u) => a + u.e * u.n, 0) || 1;
   const supply0 = U0.reduce((a, u) => a + u.s * u.n, 0), sR = supply0 / eA, bR = U0.reduce((a, u) => a + u.b * u.n, 0) / eA;
@@ -1165,7 +1199,7 @@ function recCalc(code, rows) {
     const mk = mktFor(rows, e, S.rent.rate / 100); if (mk.cnt < 5) continue;
     for (const t of REC_T) {
       const s = clone(S), sz = Math.round(e * sR * 10) / 10, n = Math.max(1, Math.round(supply0 / sz));
-      s.meta.lawd = code; s.meta.umd = ''; s.meta.addr = ''; s.meta.type = t; s.meta.period = Math.max(s.meta.period, FE.DUTY[t] >= 50 ? 50 : 30); s.eval.exit = 'hold'; rgCoef(s, code);
+      s.meta.lawd = code; s.meta.umd = ''; s.meta.addr = ''; s.meta.type = t; s.meta.period = Math.max(s.meta.period, FE.DUTY[t] >= 50 ? 50 : 30); s.eval.exit = 'hold'; rgCoef(s, code); landSet(s, land);
       s.units = [{ ...U0[0], t: `${e}형`, e, s: sz, n, b: Math.round(e * bR * 10) / 10, mkt: Math.round(mk.conv), cnt: mk.cnt }];
       ['gov', 'loc', 'inv', 'loan'].forEach(k => { s.fin[k] = Math.round(S.fin[k] * (n * e) / eA); });   // 지원 단가는 평당 단가 × 평형이라 전용면적 합계에 비례
       const R = FE.run(s);
@@ -1175,7 +1209,7 @@ function recCalc(code, rows) {
   // 현재 세대 구성도 후보로 (유형만 바꿔 보기)
   const mks = U0.map(u => mktFor(rows, u.e, S.rent.rate / 100));
   if (mks.every(m => m.cnt >= 3)) for (const t of REC_T) {
-    const s = clone(S); s.meta.lawd = code; s.meta.umd = ''; s.meta.addr = ''; s.meta.type = t; s.meta.period = Math.max(s.meta.period, 30); s.eval.exit = 'hold'; rgCoef(s, code);
+    const s = clone(S); s.meta.lawd = code; s.meta.umd = ''; s.meta.addr = ''; s.meta.type = t; s.meta.period = Math.max(s.meta.period, 30); s.eval.exit = 'hold'; rgCoef(s, code); landSet(s, land);
     s.units.forEach((u, i) => { u.mkt = Math.round(mks[i].conv); u.cnt = mks[i].cnt; });
     const R = FE.run(s), main = U0.slice().sort((a, b) => b.n - a.n)[0], mi = U0.indexOf(main);
     tried.push({ s, e: main.e, t, n: hh0, mk: mks[mi], cur: true, npv: R.Ev.npvEq, irr: R.Ev.irrEq, pay: R.Ev.payback ? R.Ev.payback - R.Ev.Cy : null, rent: R.Rn.annual / 12 / hh0 });
