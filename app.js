@@ -370,6 +370,7 @@ let R = null;
 function update(src) {
   R = FE.run(S);
   renderOv(); renderSvTable(src); renderRn(src); renderTc(); renderFd(); renderEv(); renderStrip(); tweenNums(); eokHelpers();
+  if ($('v-ev').classList.contains('imp')) renderImprove();
   store.set('fs-current', S);
 }
 
@@ -927,6 +928,103 @@ document.addEventListener('input', e => {
   try { t.setSelectionRange(c, c); } catch (er) {}
   const row = t.closest('td'); const s = row && row.querySelector('.eok:not([data-eok])'); if (s && t.dataset.c === 'mkt') s.textContent = "= " + eokTxt(numOf(t) * 1e4);
 }, true);
+
+// ---------- 수익성 개선 시뮬레이션: 기본 입력은 그대로, 조정값만 얹어 비교 ----------
+const ADJ0 = { l2g: 0, grant: 0, land: false, cost: 0, mkt: 0, shop: null, rate: null, vac: null };
+let ADJ = { ...ADJ0 };
+const LEVERS = [
+  { k: 'l2g', t: '기금 융자 → 무상 보조로 전환', u: '억원', min: 0, max: () => S.fin.loan / 100, step: 0.5, d: '빌린 돈(기금 융자)을 국비·도비 보조로 바꿉니다. 이자와 원금 상환이 줄어듭니다.' },
+  { k: 'grant', t: '무상 보조 추가 (국비·도비·시비)', u: '억원', min: 0, max: () => Math.ceil(R.C.TC / 1e8), step: 0.5, d: '공사가 낼 자체자금을 보조금으로 대신합니다.' },
+  { k: 'land', t: '토지를 지자체 현물출자로 처리', tg: true, d: () => `토지비 ${eok(S.cost.land * M)}를 공사 돈이 아니라 도·시가 현물로 넣는 것으로 봅니다.` },
+  { k: 'cost', t: '공사비 절감', u: '%', min: 0, max: () => 30, step: 0.5, d: '직접공사비를 줄입니다(설계 최적화, 공법 변경 등).' },
+  { k: 'mkt', t: '임대 시세 변화', u: '%', min: -20, max: () => 30, step: 1, d: '주변 시세가 오르거나 내리는 경우. 공공임대 임대료는 시세 대비 비율이 법으로 정해져 있어 임대료를 마음대로 올릴 수는 없습니다.' },
+  { k: 'shop', t: '상가·부대시설 임대수입 (연)', u: '억원', min: 0, max: () => 5, step: 0.05, base: () => S.op.other / 100, d: '상가·어린이집 등에서 1년에 받는 임대료입니다.' },
+  { k: 'rate', t: '기금 융자 금리', u: '%', min: 0, max: () => 5, step: 0.05, base: () => S.fin.loanRate, d: '제로에너지 인증 우대 등으로 금리가 낮아지는 경우.' },
+  { k: 'vac', t: '공가율 (빈 집 비율)', u: '%', min: 0, max: () => 20, step: 0.5, base: () => S.op.vac, d: '입주 홍보·관리로 빈 집을 줄이는 경우.' }
+];
+const levVal = L => L.tg ? ADJ[L.k] : (ADJ[L.k] === null ? L.base() : ADJ[L.k]);
+function adjState(adj, base) {
+  const s = clone(base || S), a = adj;
+  const mv = Math.min(a.l2g * 100, s.fin.loan); s.fin.loan -= mv; s.fin.gov += mv;
+  s.fin.gov += a.grant * 100;
+  if (a.land) s.fin.ink += s.cost.land;
+  s.cost.direct *= 1 - a.cost / 100;
+  if (a.mkt) s.units.forEach(u => { u.mkt *= 1 + a.mkt / 100; });
+  if (a.shop !== null) s.op.other = a.shop * 100;
+  if (a.rate !== null) s.fin.loanRate = a.rate;
+  if (a.vac !== null) s.op.vac = a.vac;
+  return s;
+}
+function levSolve(L) {   // 다른 조정은 그대로 두고 이 항목만으로 손익 0이 되는 값
+  if (L.tg) return null;
+  const at = v => FE.run(adjState({ ...ADJ, [L.k]: v })).Ev.npvEq;
+  const better = L.k === 'rate' || L.k === 'vac' ? -1 : 1;   // 금리·공가율은 낮출수록 좋음
+  let lo = L.min, hi = L.max();
+  const goodEnd = better > 0 ? hi : lo, badEnd = better > 0 ? lo : hi;
+  if (at(badEnd) >= 0) return { ok: true, v: badEnd, already: true };
+  if (at(goodEnd) < 0) return { ok: false };
+  let a = badEnd, b = goodEnd;
+  for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if (at(m) >= 0) b = m; else a = m; }
+  const st = L.step, v = better > 0 ? Math.ceil(b / st) * st : Math.floor(b / st) * st;
+  return { ok: true, v: +v.toFixed(4) };
+}
+const fmtLev = (L, v) => L.tg ? (v ? '적용' : '안 함') : `${L.k === 'mkt' && v > 0 ? '+' : ''}${(+v).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}${L.u}`;
+function impPieces() {
+  const A = FE.run(S), B = FE.run(adjState(ADJ)), d = S.eval.disc / 100;
+  const pb = E => E.payback ? `운영 ${E.payback - E.Cy}년차` : '미회수';
+  const row = (lbl, a, b, fa, better) => { const diff = b - a; const cls = Math.abs(diff) < 1e-9 ? '' : (better(diff) ? 'up' : 'dn'); return `<tr><td>${lbl}</td><td class="n">${fa(a)}</td><td class="n"><b class="${cls}">${fa(b)}</b></td></tr>`; };
+  const cmp = `<table class="cmp"><thead><tr><th></th><th class="n">지금</th><th class="n">조정 후</th></tr></thead><tbody>`
+    + row('최종 손익 (공사, 지금 가치)', A.Ev.npvEq, B.Ev.npvEq, eok, x => x > 0)
+    + row('연 수익률 (공사)', A.Ev.irrEq ?? -1, B.Ev.irrEq ?? -1, v => v === -1 ? '산출 불가' : pct(v), x => x > 0)
+    + `<tr><td>투자금 회수</td><td class="n">${pb(A.Ev)}</td><td class="n"><b class="${B.Ev.payback && !A.Ev.payback ? 'up' : ''}">${pb(B.Ev)}</b></td></tr>`
+    + row('1년 빚 갚을 여력 (최저)', A.Ev.minDSCR ?? 99, B.Ev.minDSCR ?? 99, v => v === 99 ? '빚 없음' : v.toFixed(2) + '배', x => x > 0)
+    + row('공사 자체자금', A.Fd.own, B.Fd.own, eok, x => x < 0)
+    + row('연평균 운영수지', A.Ev.avgNOI, B.Ev.avgNOI, eok, x => x > 0)
+    + `</tbody></table>`;
+  const ok = B.Ev.npvEq >= 0, changed = JSON.stringify(ADJ) !== JSON.stringify(ADJ0);
+  const verdict = `<p class="${ok ? 'warn ok' : 'warn'}" style="margin:12px 0 0">${ok ? `조정 후 최종 손익 <b>${eok(B.Ev.npvEq)}</b>: 손익 0 이상입니다.` : `아직 <b>${eok(-B.Ev.npvEq)}</b> 손해입니다. 왼쪽 항목의 "손익 0이 되는 값"을 눌러 보세요.`}${B.Ev.minDSCR !== null && B.Ev.minDSCR < 1 ? ' 다만 1년 빚 갚을 여력이 1배 미만이라 매년 현금은 모자랍니다.' : ''}</p>`;
+  const hints = {};
+  LEVERS.forEach(L => { const sol = levSolve(L); hints[L.k] = L.tg ? '' : !sol ? '' : sol.already ? '<span class="no">이 항목 없이도 손익 0 이상</span>' : sol.ok ? `<button type="button" data-solve="${L.k}" data-v="${sol.v}">손익 0이 되는 값 ${fmtLev(L, sol.v)} 적용</button>` : '<span class="no">이 항목만으로는 손익 0 불가</span>'; });
+  return { res: cmp + verdict, hints, changed };
+}
+function impRefresh() {
+  if (!$('impResBody')) return renderImprove();
+  const P = impPieces(); $('impResBody').innerHTML = P.res;
+  LEVERS.forEach(L => { const el = $('hint-' + L.k); if (el) el.innerHTML = P.hints[L.k]; });
+  $('impApply').disabled = $('impReset').disabled = !P.changed;
+}
+function renderImprove() {
+  const box = $('evImprove'); if (!box || !R) return;
+  const P = impPieces();
+  const levers = LEVERS.map(L => {
+    const v = levVal(L), hint = P.hints[L.k];
+    const ctl = L.tg ? `<label class="tg"><input type="checkbox" data-lev="${L.k}" ${v ? 'checked' : ''} style="width:20px;min-height:20px"> ${L.t}</label>`
+      : `<div class="lh"><b>${L.t}</b><span class="val" id="lv-${L.k}">${fmtLev(L, v)}</span></div><input type="range" data-lev="${L.k}" min="${L.min}" max="${L.max()}" step="${L.step}" value="${v}" aria-label="${L.t}">`;
+    return `<div class="lever">${ctl}<div class="hint"><span>${typeof L.d === 'function' ? L.d() : L.d}</span><span id="hint-${L.k}">${hint}</span></div></div>`;
+  }).join('');
+  box.innerHTML = `<h2>수익성 개선 시뮬레이션</h2><p class="note" style="margin-top:0">입력한 사업은 그대로 두고 아래 항목만 바꿔 보며 결과를 비교합니다. 마음에 들면 "이 조정을 사업에 적용"을 누르세요.</p>
+<div class="imp-grid"><div>${levers}</div><div class="imp-res"><h2 style="font-size:17px">결과 비교</h2><div id="impResBody">${P.res}</div>
+<div class="row"><button class="btn pri" id="impApply" ${P.changed ? '' : 'disabled'}>이 조정을 사업에 적용</button><button class="btn" id="impReset" ${P.changed ? '' : 'disabled'}>조정 초기화</button></div>
+<p class="note">공공임대 임대료 상한, 기금 지원 한도, 보조금 협의 가능 여부는 실제 협의 결과에 따라 달라집니다.</p></div></div>`;
+}
+document.addEventListener('input', e => {
+  const t = e.target; if (!t.dataset || !t.dataset.lev) return;
+  const L = LEVERS.find(x => x.k === t.dataset.lev);
+  ADJ[L.k] = L.tg ? t.checked : parseFloat(t.value);
+  if (!L.tg) { const sp = $('lv-' + L.k); if (sp) sp.textContent = fmtLev(L, ADJ[L.k]); }
+  clearTimeout(impRefresh._t); impRefresh._t = setTimeout(impRefresh, 50);
+}, true);
+document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.lev && e.target.type === 'checkbox') impRefresh(); }, true);
+document.addEventListener('click', e => {
+  const s = e.target.closest('[data-solve]'); if (s) { ADJ[s.dataset.solve] = parseFloat(s.dataset.v); renderImprove(); const n = document.querySelector(`[data-lev="${s.dataset.solve}"]`); if (n) n.focus(); return; }
+  if (e.target.id === 'impReset') { ADJ = { ...ADJ0 }; renderImprove(); }
+  if (e.target.id === 'impApply') { S = adjState(ADJ); ADJ = { ...ADJ0 }; buildFields(); fillFields(); update(); renderImprove(); toast('조정한 값을 사업에 적용했습니다. 재원·총사업비·운영 가정 탭에 반영됐습니다.'); }
+  const sb = e.target.closest('.subtabs [data-sub]'); if (sb) {
+    document.querySelectorAll('.subtabs [data-sub]').forEach(b => b.setAttribute('aria-selected', b === sb));
+    $('v-ev').classList.toggle('imp', sb.dataset.sub === 'imp');
+    if (sb.dataset.sub === 'imp') renderImprove(); else drawEv();
+  }
+});
 
 // ---------- 쉬운 사용: 요약 띠·판정, 단계 이동, 숫자 움직임 ----------
 const REDUCE = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
