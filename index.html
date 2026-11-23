@@ -175,6 +175,15 @@ input,select,.btn{border-radius:6px}
 .law-dlg .li small{display:block;color:var(--mute);margin-top:3px}
 .lawflag{flex:0 0 auto;border:1px solid var(--mag);color:var(--mag);background:none;border-radius:6px;padding:5px 10px;font:600 13px "IBM Plex Sans KR",sans-serif;cursor:pointer;white-space:nowrap}
 .lawflag:hover{background:color-mix(in srgb,var(--mag) 8%,transparent)}
+
+#rgTbl td,#rgTbl th{white-space:nowrap;vertical-align:middle}
+#rgTbl tr.ok td:first-child{box-shadow:inset 4px 0 var(--ok)}
+#rgTbl tr.cur td{background:color-mix(in srgb,var(--sky) 7%,transparent)}
+.nbar{position:relative;height:16px;min-width:160px;background:var(--soft);border-radius:4px}
+.nbar i{position:absolute;top:2px;bottom:2px;border-radius:2px}.nbar .z{left:50%;width:1px;top:0;bottom:0;background:var(--ink)}
+.rgsum{display:flex;flex-wrap:wrap;gap:8px 28px;align-items:baseline;margin-bottom:10px}
+.rgsum b{font:800 26px/1.1 "Red Hat Display","IBM Plex Sans KR",sans-serif}
+.rgsum .pos b{color:var(--ok)}.rgsum .neg b{color:var(--mag)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -189,6 +198,7 @@ input,select,.btn{border-radius:6px}
 <button role="tab" data-v="tc" aria-selected="false">4. 총사업비</button>
 <button role="tab" data-v="fd" aria-selected="false">5. 재원 조달</button>
 <button role="tab" data-v="ev" aria-selected="false">6. 수익성</button>
+<button role="tab" data-v="rg" aria-selected="false">강원 지역 비교</button>
 <button role="tab" data-v="cp" aria-selected="false">사업 비교</button>
 <button role="tab" data-v="lw" aria-selected="false">법령 근거</button>
 </nav><div class="prog" aria-hidden="true"><i id="progBar"></i></div></div></header>
@@ -254,6 +264,14 @@ input,select,.btn{border-radius:6px}
 <div class="panel res"><h2 id="evTitle">수익성</h2><div class="big" id="evBig"></div><div class="fig" id="evFig"></div><div class="legend"><span><i class="c3"></i>공사 관점 누적 현금흐름</span><span><i class="c4"></i>사업 전체 누적 현금흐름</span></div><div id="evChk"></div></div>
 <div class="panel" style="grid-column:1/-1"><h2>민감도 분석 (공사 관점 NPV)</h2><div id="sens"></div><p class="note">각 변수를 불리한 쪽(분홍)과 유리한 쪽(초록)으로 바꿨을 때 NPV가 기준값에서 얼마나 움직이는지 보여 줍니다.</p></div>
 <div class="panel" style="grid-column:1/-1"><h2>연도별 운영수지표</h2><div class="row" style="margin-top:0"><button class="btn" id="btnCSV">표 복사 (엑셀 붙여넣기용)</button><span class="note" id="csvMsg" style="margin:0"></span></div><div class="scroll" style="margin-top:10px"><table id="cfTbl"></table></div></div>
+</section>
+
+<section class="view wide" id="v-rg">
+<div class="panel"><h2>강원 18개 시군에서 같은 사업을 하면</h2>
+<p class="note" style="margin-top:0">지금 입력한 사업(세대 타입·공사비·재원·운영 가정)을 그대로 두고, 시군마다 실거래 시세만 바꿔 계산합니다. 토지비와 공사비는 시군별로 다르지 않다고 봅니다.</p>
+<div class="row"><button class="btn pri" id="rgRun">18개 시군 비교 실행</button><button class="btn" id="rgFresh">새로 조회</button><button class="btn" id="rgStop" hidden>중지</button><span class="note" id="rgMsg" style="margin:0"></span></div>
+<div class="prog" style="background:var(--soft);margin-top:10px;height:4px;border-radius:2px" aria-hidden="true"><i id="rgBar" style="width:0"></i></div></div>
+<div class="panel"><div id="rgSum"></div><div class="scroll"><table id="rgTbl"></table></div><p class="note" id="rgNote"></p></div>
 </section>
 
 <section class="view wide" id="v-cp">

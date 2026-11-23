@@ -80,6 +80,16 @@ export default async function handler(req, res) {
   const errors = [];
   const jobs = [];
   for (const t of types) for (const ym of yms) jobs.push(() => fetchMonth(key, t, lawd, ym).catch(e => { errors.push(e.message); return []; }));
-  const rows = (await pool(jobs, 3)).flat();
-  send(res, 200, { lawd, months: yms, types, count: rows.length, errors, rows });
+  let rows = (await pool(jobs, 3)).flat();
+  const total = rows.length;
+  // 지역 비교용: 필요한 면적대만 가볍게 돌려줌 (areas=31,46&band=5)
+  const areas = (q.get('areas') || '').split(',').map(Number).filter(v => v > 0);
+  if (areas.length) {
+    const band = Math.min(30, Math.max(1, parseFloat(q.get('band') || '5')));
+    rows = rows.filter(x => x.area > 0 && areas.some(a => Math.abs(x.area - a) <= band))
+      .map(x => ({ type: x.type, name: x.name, dong: x.dong, area: x.area, deposit: x.deposit, monthly: x.monthly }));
+  }
+  // 같은 조회는 Vercel CDN에 12시간 보관 (접근코드를 쓰지 않을 때만)
+  if (!process.env.APP_PASSCODE && !errors.length) res.setHeader('Cache-Control', 'public, s-maxage=43200, stale-while-revalidate=86400');
+  send(res, 200, { lawd, months: yms, types, count: total, errors, rows });
 }
