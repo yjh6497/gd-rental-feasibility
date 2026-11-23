@@ -1220,7 +1220,7 @@ function recState(code, landU, t, mix) {   // mix: [{e, mk, n}]  landU: 원/㎡
   const floors = Math.max(3, Math.min(25, Math.ceil(gfa / (site * 0.5))));
   s.meta.floor = floors; s.meta.kind = 'house';
   s.cost = { ...s.cost, direct: Math.round(gfa * TPL.cost * 1e4 / M), designP: TPL.designP, superP: 0, otherP: TPL.otherP, contP: TPL.contP, land: Math.round(site * landU / M), siteArea: Math.round(site), finCost: 0, struct: 0, sash: 0, island: 0, stdAdd: 0 };
-  s.fin = { ...s.fin, gov: 0, loc: 0, inv: 0, loan: 0, ink: 0, bond: 0 };
+  s.fin = { ...S.fin, gov: 0, loc: 0, inv: 0, loan: 0, ink: 0, bond: 0 };   // 금리·거치·상환기간은 지금 입력값
   rgCoef(s, code); applySupport(s);
   s._tpl = { supply, gfa, site, floors, landU };
   return s;
