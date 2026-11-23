@@ -1172,6 +1172,14 @@ function recCalc(code, rows) {
       tried.push({ s, e, t, n, mk, npv: R.Ev.npvEq, irr: R.Ev.irrEq, pay: R.Ev.payback ? R.Ev.payback - R.Ev.Cy : null, rent: R.Rn.annual / 12 / n });
     }
   }
+  // 현재 세대 구성도 후보로 (유형만 바꿔 보기)
+  const mks = U0.map(u => mktFor(rows, u.e, S.rent.rate / 100));
+  if (mks.every(m => m.cnt >= 3)) for (const t of REC_T) {
+    const s = clone(S); s.meta.lawd = code; s.meta.umd = ''; s.meta.addr = ''; s.meta.type = t; s.meta.period = Math.max(s.meta.period, 30); s.eval.exit = 'hold'; rgCoef(s, code);
+    s.units.forEach((u, i) => { u.mkt = Math.round(mks[i].conv); u.cnt = mks[i].cnt; });
+    const R = FE.run(s), main = U0.slice().sort((a, b) => b.n - a.n)[0], mi = U0.indexOf(main);
+    tried.push({ s, e: main.e, t, n: hh0, mk: mks[mi], cur: true, npv: R.Ev.npvEq, irr: R.Ev.irrEq, pay: R.Ev.payback ? R.Ev.payback - R.Ev.Cy : null, rent: R.Rn.annual / 12 / hh0 });
+  }
   if (!tried.length) return { none: true };
   tried.sort((a, b) => b.npv - a.npv);
   const best = tried[0], perE = REC_E.map(e => { const m = mktFor(rows, e, S.rent.rate / 100); return { e, ...m }; }).filter(m => m.cnt >= 5);
@@ -1182,7 +1190,8 @@ function recWhy(x) {
   const b = x.best, nm = FE.TYPE_NAME[b.t], d = b.npv - (x.base.thin ? NaN : x.base.npv);
   const parts = [];
   parts.push(`${b.e}㎡ 전월세 거래 ${n0(b.mk.cnt)}건, 전세 환산 ${n0(b.mk.conv)}만원(㎡당 ${n0(b.mk.conv / b.e)}만원).`);
-  if (x.deep && x.deep.e !== b.e) parts.push(`거래가 가장 많은 건 ${x.deep.e}㎡(${n0(x.deep.cnt)}건)지만 손익은 ${b.e}㎡가 더 낫습니다.`);
+  if (b.cur) parts.push('지금 세대 구성(평형)을 유지하는 편이 가장 낫습니다.');
+  else if (x.deep && x.deep.e !== b.e) parts.push(`거래가 가장 많은 건 ${x.deep.e}㎡(${n0(x.deep.cnt)}건)지만 손익은 ${b.e}㎡가 더 낫습니다.`);
   else if (x.deep) parts.push(`이 시군에서 거래가 가장 많은 평형입니다.`);
   parts.push(`후보 ${x.tried.length}개 중 ${iGa(nm)} 가장 유리합니다${isFinite(d) ? ` (현재 사업안보다 ${d >= 0 ? eok(d) + ' 개선' : eok(-d) + ' 불리'})` : ''}.`);
   if (b.npv < 0) parts.push('그래도 손해라 무상 지원 확대나 융자 축소가 함께 필요합니다.');
@@ -1192,11 +1201,11 @@ function rgRecDraw() {
   if (!RG || !RG.rec) { $('rgRecSum').innerHTML = ''; $('rgRec').innerHTML = ''; return; }
   const L = RG.rec.filter(x => !x.none).sort((a, b) => b.best.npv - a.best.npv), none = RG.rec.filter(x => x.none);
   const rec = L.filter(x => payReal(x.best.pay, x.best.s.meta.period)), top = L.find(x => x.best.mk.cnt >= 10) || L[0];
-  $('rgRecSum').innerHTML = `<div class="rgsum"><div class="${rec.length ? 'pos' : 'neg'}"><small>추천안으로 투자금 회수 가능</small><br><b>${rec.length}곳</b></div>${top ? `<div><small>가장 나은 추천안 (거래 10건 이상)</small><br><b>${top.name}</b> <span class="note">${FE.TYPE_NAME[top.best.t]} ${top.best.e}㎡ ${top.best.n}세대 · ${eok(top.best.npv)}</span></div>` : ''}</div>`
-    + `<p class="note" style="margin-top:0">시군마다 공급 유형 2가지(통합공공임대·행복주택) × 주력 평형 4가지(26·36·46·59㎡)를 모두 계산해 공사 손익이 가장 좋은 안을 골랐습니다. 주택공급면적 합계는 지금 사업과 같게 두고, 국비·기금 지원은 실제 기준(평당 단가 × 평형)처럼 전용면적 합계에 비례하게 잡았습니다.</p>`;
+  $('rgRecSum').innerHTML = `<div class="rgsum"><div class="${rec.length ? 'pos' : 'neg'}"><small>추천안으로 투자금 회수 가능</small><br><b>${rec.length}곳</b></div>${top ? `<div><small>가장 나은 추천안 (거래 10건 이상)</small><br><b>${top.name}</b> <span class="note">${FE.TYPE_NAME[top.best.t]} ${top.best.cur ? '현재 구성' : top.best.e + '㎡'} ${top.best.n}세대 · ${eok(top.best.npv)}</span></div>` : ''}</div>`
+    + `<p class="note" style="margin-top:0">시군마다 공급 유형 2가지(통합공공임대·행복주택) × 주력 평형 4가지(26·36·46·59㎡)와 지금 세대 구성을 모두 계산해 공사 손익이 가장 좋은 안을 골랐습니다. 주택공급면적 합계는 지금 사업과 같게 두고, 국비·기금 지원은 실제 기준(평당 단가 × 평형)처럼 전용면적 합계에 비례하게 잡았습니다.</p>`;
   const head = '<thead><tr><th>시군</th><th>추천 사업안</th><th class="n">세대당 월 임대료</th><th>최종 손익 (공사)</th><th class="n">투자금 회수</th><th>판단 근거</th><th></th></tr></thead>';
   const mx = Math.max(1, ...L.map(x => Math.abs(x.best.npv)));
-  $('rgRec').innerHTML = head + '<tbody>' + L.map(x => { const b = x.best; return `<tr class="${payReal(b.pay, b.s.meta.period) ? 'ok' : ''}"><td><b>${x.name}</b>${b.mk.cnt < 10 ? ' <small style="color:#b86e00">⚠ 거래 적음</small>' : ''}</td><td class="plan"><b>${FE.TYPE_NAME[b.t]}</b>${b.e}㎡ (공급 ${b.s.units[0].s}㎡) ${b.n}세대</td><td class="n">${won(b.rent)}</td>`
+  $('rgRec').innerHTML = head + '<tbody>' + L.map(x => { const b = x.best; return `<tr class="${payReal(b.pay, b.s.meta.period) ? 'ok' : ''}"><td><b>${x.name}</b>${b.mk.cnt < 10 ? ' <small style="color:#b86e00">⚠ 거래 적음</small>' : ''}</td><td class="plan"><b>${FE.TYPE_NAME[b.t]}</b>${b.cur ? `지금 세대 구성 유지 (${b.s.units.map(u => `${u.e}㎡ ${u.n}세대`).join(', ')})` : `${b.e}㎡ (공급 ${b.s.units[0].s}㎡) ${b.n}세대`}</td><td class="n">${won(b.rent)}</td>`
     + `<td><div style="display:flex;align-items:center;gap:8px"><div class="nbar"><i class="z"></i><i style="${b.npv >= 0 ? `left:50%;width:${b.npv / mx * 50}%;background:var(--ok)` : `right:50%;width:${-b.npv / mx * 50}%;background:var(--mag)`}"></i></div><span style="color:${b.npv < 0 ? 'var(--mag)' : 'var(--ok)'}">${eok(b.npv)}</span></div></td>`
     + `<td class="n">${payTxt(b.pay, b.s.meta.period)}</td><td class="why">${recWhy(x)}</td><td><button class="btn pri" data-recapply="${x.base.code}" style="min-height:34px;white-space:nowrap">사업개요부터 적용</button></td></tr>`; }).join('')
     + none.map(x => `<tr><td>${x.name}</td><td colspan="6" class="note">후보 평형 모두 거래가 5건 미만이라 추천하지 않습니다 (조회 기간을 24개월로 늘려 보세요)</td></tr>`).join('') + '</tbody>';
@@ -1207,7 +1216,7 @@ document.addEventListener('click', e => {
   const a = e.target.closest('[data-recapply]'); if (!a || !RG) return;
   const x = RG.rec.find(r => r.base.code === a.dataset.recapply); if (!x || x.none) return;
   const nm = x.name, b = x.best;
-  S = clone(b.s); S.meta.name = `${nm} ${FE.TYPE_NAME[b.t]} ${b.e}㎡ ${b.n}세대 (추천안)`; SV = null; projId = null; store.set('fs-current-id', null);
+  S = clone(b.s); S.meta.name = `${nm} ${FE.TYPE_NAME[b.t]} ${b.cur ? '현재 구성' : b.e + '㎡'} ${b.n}세대 (추천안)`; SV = null; projId = null; store.set('fs-current-id', null);
   buildFields(); fillFields(); unitTable(); update(); loadUmd(S.meta.lawd); showLaw(false);
   goTab('ov'); toast(`${nm} 추천 사업안을 사업 개요부터 넣었습니다. 각 탭을 확인한 뒤 "사업 저장"을 누르세요.`);
 });
