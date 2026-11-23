@@ -1081,7 +1081,7 @@ document.addEventListener('click', e => {
 
 // ---------- 문서로 자동 입력 (Gemini) ----------
 let DOC = null, hasGemini = false;
-const DOC_LBL = { name: '사업명', sgg: '시군', umd: '읍면동', addr: '상세 주소', type: '공급 유형', constr: '공사 기간', floor: '최고 층수', direct_won: '직접공사비', design_won: '설계비', supervision_won: '감리비', other_won: '부대비(인건비·관리비 등)', contingency_won: '예비비', land_won: '토지비', fincost_won: '건설 중 금융비용', gov_won: '국고 보조', loc_won: '지방비 보조·출자', inv_won: '주택도시기금 출자', loan_won: '주택도시기금 융자', ink_won: '지자체 현물출자', bond_won: '공사채 발행', loan_rate_pct: '기금 융자 금리', other_annual_won: '상가·부대시설 연 임대수입' };
+const DOC_LBL = { hh: '총 세대수', site_area: '대지면적', name: '사업명', sgg: '시군', umd: '읍면동', addr: '상세 주소', type: '공급 유형', constr: '공사 기간', floor: '최고 층수', direct_won: '직접공사비', design_won: '설계비', supervision_won: '감리비', other_won: '부대비(인건비·관리비 등)', contingency_won: '예비비', land_won: '토지비', fincost_won: '건설 중 금융비용', gov_won: '국고 보조', loc_won: '지방비 보조·출자', inv_won: '주택도시기금 출자', loan_won: '주택도시기금 융자', ink_won: '지자체 현물출자', bond_won: '공사채 발행', loan_rate_pct: '기금 융자 금리', other_annual_won: '상가·부대시설 연 임대수입' };
 const fileB64 = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(f); });
 const fileText = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = no; r.readAsText(f); });
 const xmlText = xml => xml.replace(/<\/hp:tc>|<\/w:tc>/g, ' | ').replace(/<\/hp:tr>|<\/w:tr>/g, '\n').replace(/<\/hp:p>|<\/w:p>/g, '\n').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n');
@@ -1114,11 +1114,15 @@ function docRows(res) {
   if (F.addr) add('addr', DOC_LBL.addr, S.meta.addr, F.addr.value, s => { s.meta.addr = F.addr.value; });
   if (F.type && FE.TYPE_NAME[F.type.value]) add('type', DOC_LBL.type, FE.TYPE_NAME[S.meta.type], FE.TYPE_NAME[F.type.value], s => { s.meta.type = F.type.value; const d = FE.DUTY[s.meta.type]; if (d) s.meta.period = d >= 50 ? 50 : 30; });
   if (!isNaN(num('constr'))) add('constr', DOC_LBL.constr, S.meta.constr + '년', num('constr') + '년', s => { s.meta.constr = Math.max(1, Math.round(num('constr'))); });
+  if (!isNaN(num('site_area'))) add('site_area', '대지면적', n0(S.cost.siteArea || 0) + '㎡', n0(num('site_area')) + '㎡', s => { s.cost.siteArea = num('site_area'); });
   if (!isNaN(num('floor'))) add('floor', DOC_LBL.floor, S.meta.floor + '층', num('floor') + '층', s => { s.meta.floor = Math.round(num('floor')); });
   if (res.units && res.units.length) {
-    const U2 = res.units.filter(u => u && u.n > 0 && u.e > 0);
+    const hhDoc = num('hh'), seen = {};
+    let U2 = res.units.filter(u => u && u.e > 0).filter(u => { const k = u.e + '|' + (u.s || ''); if (seen[k]) return false; seen[k] = 1; return true; });
+    if (U2.length === 1 && !(U2[0].n > 0) && hhDoc > 0) U2[0].n = hhDoc;   // 타입이 하나인데 세대수가 따로 적힌 경우
+    U2 = U2.filter(u => u.n > 0);
     if (U2.length) add('units', '세대 타입', S.units.map(u => `${u.t} ${u.e}㎡ ${u.n}세대`).join(', '), U2.map(u => `${u.t || Math.round(u.e) + '형'} ${u.e}㎡(공급 ${u.s || '?'}㎡) ${u.n}세대`).join(', '),
-      s => { s.units = U2.map((u, i) => ({ ...(S.units[i] || S.units[0]), t: u.t || Math.round(u.e) + '형', e: +u.e, s: +(u.s || u.e * 1.4), n: Math.round(u.n), b: +(u.b || 0), cnt: 0 })); });
+      s => { s.units = U2.map((u, i) => ({ ...(S.units[i] || S.units[0]), t: /\d/.test(u.t || '') ? u.t : Math.round(u.e) + '형', e: +u.e, s: +(u.s || u.e * 1.4), n: Math.round(u.n), b: +(u.b || 0), cnt: 0 })); });
   }
   const W = k => num(k), M6 = v => Math.round(v / 1e6 * 100) / 100;
   const direct = !isNaN(W('direct_won')) ? W('direct_won') : S.cost.direct * M;
@@ -1148,7 +1152,7 @@ ${hasGemini ? '' : '<p class="warn">서버에 Gemini 인증키(GEMINI_API_KEY)�
   $('docApply').hidden = true; $('docDlg').classList.add('on'); $('docPick').focus();
 }
 async function docRun(f) {
-  $('docBody').innerHTML = `<p><span class="spin"></span><b>${f.name}</b> 읽는 중… (문서 크기에 따라 10~40초)</p>`;
+  $('docBody').innerHTML = `<p><span class="spin"></span><b>${f.name}</b> 읽는 중… (보통 20초~1분, Gemini가 붐비면 더 걸립니다)</p>`;
   $('docApply').hidden = true;
   try {
     const payload = await docPayload(f);
